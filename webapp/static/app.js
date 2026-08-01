@@ -262,9 +262,8 @@ async function runCommand(cmd, params, btn) {
 function runReport(btn) {
   const dominio = document.getElementById('report-dominio')?.value.trim();
   const nombre = document.getElementById('report-nombre')?.value.trim();
-  const ciber = document.getElementById('report-ciber')?.checked || false;
   if (!dominio || !nombre) { alert('Dominio y nombre son requeridos'); return; }
-  runCommand('report', { dominio, nombre, ciber }, btn);
+  runCommand('report', { dominio, nombre }, btn);
 }
 
 function runDiagnostico(btn) {

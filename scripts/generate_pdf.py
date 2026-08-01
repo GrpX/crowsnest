@@ -44,14 +44,17 @@ def translate_finding_names(data: dict) -> dict:
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 LOGO_PATH     = TEMPLATES_DIR / "sins_logo.svg"
 
-# El template se elige según el marco legal del informe (campo "framework"):
-#   datos → Ley 21.719 (Protección de Datos Personales)
-#   ciber → Ley 21.663 (Ley Marco de Ciberseguridad)
-TEMPLATE_BY_FRAMEWORK = {
-    "datos": TEMPLATES_DIR / "report_template.html",
-    "ciber": TEMPLATES_DIR / "report_template_ciber.html",
+# Una sola plantilla. Lo que antes eran dos variantes de marco legal ahora se
+# resuelve con el framework de cumplimiento activo (config/compliance/), que el
+# motor deja en el campo "compliance" del informe.
+TEMPLATE_PATH = TEMPLATES_DIR / "report_template.html"
+
+# Etiqueta visible de cada nivel de esfuerzo. Nunca un precio.
+EFFORT_LABEL = {
+    "low":    "Bajo",
+    "medium": "Medio",
+    "high":   "Alto",
 }
-TEMPLATE_PATH = TEMPLATE_BY_FRAMEWORK["datos"]   # compatibilidad / default
 
 def get_logo_b64():
     if LOGO_PATH.exists():
@@ -86,16 +89,16 @@ if __name__ == "__main__":
     data = translate_finding_names(data)
     data["logo_b64"] = get_logo_b64()
 
-    framework     = data.get("framework", "datos")
-    template_path = TEMPLATE_BY_FRAMEWORK.get(framework, TEMPLATE_PATH)
+    data["EFFORT_LABEL"] = EFFORT_LABEL
 
-    if not template_path.exists():
-        print(f"[✗] Template no encontrado: {template_path}")
-        print("    Ejecuta: sins.sh setup para regenerarlo")
+    if not TEMPLATE_PATH.exists():
+        print(f"[✗] Template no encontrado: {TEMPLATE_PATH}")
         sys.exit(1)
 
-    print(f"[*] Renderizando template ({framework})...")
-    html = render_html(data, template_path)
+    compliance = data.get("compliance") or {}
+    print(f"[*] Renderizando template "
+          f"(cumplimiento: {compliance.get('id') or 'ninguno'})...")
+    html = render_html(data, TEMPLATE_PATH)
 
     print("[*] Generando PDF...")
     generate_pdf(html, Path(args.output))

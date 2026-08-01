@@ -1,0 +1,118 @@
+# =============================================================================
+# Framework de cumplimiento: OWASP Top 10 (2021)
+#
+# Taxonomia publica y neutra de riesgos de aplicaciones web. Se incluye como
+# ejemplo funcional porque no requiere interpretacion legal: cada categoria de
+# hallazgo se mapea a un control tecnico documentado publicamente.
+#
+# Para agregar otro framework, copia este archivo y cambia id/name/mapping.
+# Ver config/compliance/README.md.
+# =============================================================================
+
+id: owasp-top10
+name: OWASP Top 10 (2021)
+reference: https://owasp.org/Top10/
+description: >-
+  Categorias de riesgo de seguridad en aplicaciones web mantenidas por la
+  OWASP Foundation. Se usan aqui como marco de referencia tecnico para
+  clasificar los hallazgos del reconocimiento pasivo.
+
+# Mapeo: tag del hallazgo -> control aplicable del framework.
+# El tag es el slug que el motor asigna a cada hallazgo (ssl, dmarc, spf,
+# exposure, misconfiguration, headers, cve, panel, ...). Ver README.md.
+mapping:
+  dmarc:
+    control: "A07:2021 — Identification and Authentication Failures"
+    url: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+    note: >-
+      La ausencia de DMARC permite suplantar la identidad del dominio en el
+      canal de correo.
+
+  spf:
+    control: "A07:2021 — Identification and Authentication Failures"
+    url: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+    note: >-
+      Sin SPF no existe control de que servidores pueden originar correo por
+      el dominio.
+
+  ssl:
+    control: "A02:2021 — Cryptographic Failures"
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+    note: >-
+      Ausencia de TLS, protocolos obsoletos o certificados invalidos en los
+      servicios expuestos.
+
+  dns:
+    control: "A05:2021 — Security Misconfiguration"
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+    note: >-
+      Zona DNS sin DNSSEC u otros defectos de configuracion del dominio.
+
+  misconfiguration:
+    control: "A05:2021 — Security Misconfiguration"
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+    note: >-
+      Servicios con configuracion por defecto o endurecimiento incompleto.
+
+  config:
+    control: "A05:2021 — Security Misconfiguration"
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+
+  headers:
+    control: "A05:2021 — Security Misconfiguration"
+    url: https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+    note: >-
+      Cabeceras HTTP de seguridad ausentes o mal configuradas.
+
+  exposure:
+    control: "A01:2021 — Broken Access Control"
+    url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+    note: >-
+      Archivos, rutas o metadatos accesibles sin autenticacion desde internet.
+
+  panel:
+    control: "A01:2021 — Broken Access Control"
+    url: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+    note: >-
+      Paneles de administracion alcanzables desde internet.
+
+  default-login:
+    control: "A07:2021 — Identification and Authentication Failures"
+    url: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+    note: >-
+      Credenciales por defecto sin cambiar.
+
+  token:
+    control: "A02:2021 — Cryptographic Failures"
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+    note: >-
+      Tokens o credenciales expuestos en respuestas publicas.
+
+  cve:
+    control: "A06:2021 — Vulnerable and Outdated Components"
+    url: https://owasp.org/Top10/A06_2021-Vulnerable_and_Outdated_Components/
+    note: >-
+      Componentes con versiones afectadas por vulnerabilidades conocidas.
+
+  wordpress:
+    control: "A06:2021 — Vulnerable and Outdated Components"
+    url: https://owasp.org/Top10/A06_2021-Vulnerable_and_Outdated_Components/
+
+  mta-sts:
+    control: "A02:2021 — Cryptographic Failures"
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+    note: >-
+      Sin MTA-STS el cifrado del transporte de correo es oportunista y
+      degradable por un atacante en ruta.
+
+  tls:
+    control: "A02:2021 — Cryptographic Failures"
+    url: https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+
+# Control asignado a los hallazgos cuyo tag no aparece en el mapeo.
+default:
+  control: "Sin control asociado en este framework"
+  url: https://owasp.org/Top10/
+  note: >-
+    El hallazgo no encaja en ningun tag mapeado. Revisar y, si aplica,
+    agregar el tag al archivo del framework.

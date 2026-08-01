@@ -14,45 +14,105 @@ Uso:
 
 import json
 import argparse
+import os
+import sys
 from datetime import datetime
 from pathlib import Path
 
-# ── SECTORES CON REPUTACIÓN COMO ACTIVO CENTRAL ───────────────────────────────
-REPUTATION_SECTORS = {
-    "legal":     ["abogad", "ley", "legal", "juridi", "notari", "litig", "tribunal",
-                  "demand", "defensa", "penal", "civil", "laboral", "tributari",
-                  "asesoria", "consultoria juridica", "estudio", "bufete"],
-    "salud":     ["clinic", "medico", "dental", "dentista", "odontolog", "salud",
-                  "veterinar", "centro medico", "consulta", "hospital", "nutricion",
-                  "kinesiolog", "psicolog", "psiquiatr", "fisioterap"],
-    "contable":  ["contad", "contabilidad", "audit", "tributari", "impuesto",
-                  "asesoria contable", "consultoria contable"],
-    "financiero": ["financier", "banco", "credito", "inversi", "patrimoni",
-                  "corredora", "seguros", "fondos"],
-    "educacion": ["colegio", "escuela", "instituto", "universidad", "educacion",
-                  "centro educativo", "preescolar"],
-    "inmobiliario": ["inmobiliari", "corredora de propiedades", "bienes raices"],
-}
+import yaml
 
-def detect_reputation_sector(client_name: str, domain: str, technologies: list,
-                              subdomains: list = None) -> str | None:
-    """
-    Detecta si la empresa pertenece a un sector dependiente de reputación.
-    Retorna el sector detectado (str) o None si no aplica.
-    Búsqueda case-insensitive en nombre, dominio, tecnologías y subdominios.
-    """
-    haystack = " ".join([
-        (client_name or "").lower(),
-        (domain or "").lower(),
-        " ".join(str(t.get("name", "")).lower() for t in (technologies or [])),
-        " ".join(str(s).lower() for s in (subdomains or [])),
-    ])
+COMPLIANCE_DIR = Path(__file__).resolve().parent.parent / "config" / "compliance"
 
-    for sector, keywords in REPUTATION_SECTORS.items():
-        for kw in keywords:
-            if kw in haystack:
-                return sector
-    return None
+
+# ── FRAMEWORK DE CUMPLIMIENTO (pluggable) ─────────────────────────────────────
+def available_frameworks() -> dict:
+    """Devuelve {id: ruta} de los frameworks declarados en config/compliance/."""
+    found = {}
+    if not COMPLIANCE_DIR.is_dir():
+        return found
+    for path in sorted(COMPLIANCE_DIR.glob("*.yaml")) + sorted(COMPLIANCE_DIR.glob("*.yml")):
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError:
+            continue
+        fid = data.get("id")
+        if fid:
+            found[str(fid)] = path
+    return found
+
+
+def load_compliance(selected: str | None):
+    """Carga el framework activo.
+
+    Precedencia: --compliance > COMPLIANCE_FRAMEWORK > el unico disponible.
+    Si hay varios y ninguno fue elegido, aborta listando los ids: adivinar el
+    encuadre de cumplimiento de un informe seria peor que fallar.
+    """
+    frameworks = available_frameworks()
+    if not frameworks:
+        print(f"[!] Sin frameworks en {COMPLIANCE_DIR}; el informe se genera sin "
+              f"seccion de cumplimiento.")
+        return None
+
+    fid = selected or os.environ.get("COMPLIANCE_FRAMEWORK")
+    if not fid:
+        if len(frameworks) == 1:
+            fid = next(iter(frameworks))
+        else:
+            print("[✗] Hay varios frameworks de cumplimiento y ninguno seleccionado.",
+                  file=sys.stderr)
+            print("    Usa --compliance <id> o COMPLIANCE_FRAMEWORK=<id>.", file=sys.stderr)
+            print("    Disponibles: " + ", ".join(sorted(frameworks)), file=sys.stderr)
+            sys.exit(2)
+
+    if fid not in frameworks:
+        print(f"[✗] Framework de cumplimiento desconocido: {fid!r}", file=sys.stderr)
+        print("    Disponibles: " + ", ".join(sorted(frameworks)), file=sys.stderr)
+        sys.exit(2)
+
+    return yaml.safe_load(frameworks[fid].read_text(encoding="utf-8"))
+
+
+def build_compliance_block(fw: dict | None, findings: list) -> dict | None:
+    """Mapea las categorias de los hallazgos a controles del framework activo."""
+    if not fw:
+        return None
+
+    mapping = fw.get("mapping") or {}
+    fallback = fw.get("default") or {}
+
+    controles = {}
+    for f in findings:
+        # Se mapea por tag (slug estable), no por la etiqueta legible.
+        entry = None
+        for tag in (f.get("tags") or []):
+            if tag.lower() in mapping:
+                entry = mapping[tag.lower()]
+                break
+        if entry is None:
+            entry = fallback
+        if not entry:
+            continue
+        clave = entry.get("control", "")
+        cat = f.get("category") or ""
+        item = controles.setdefault(clave, {
+            "control":    clave,
+            "url":        entry.get("url", ""),
+            "note":       entry.get("note", ""),
+            "categories": [],
+            "findings":   0,
+        })
+        item["findings"] += 1
+        if cat and cat not in item["categories"]:
+            item["categories"].append(cat)
+
+    return {
+        "id":          fw.get("id", ""),
+        "name":        fw.get("name", ""),
+        "reference":   fw.get("reference", ""),
+        "description": (fw.get("description") or "").strip(),
+        "controls":    sorted(controles.values(), key=lambda c: c["control"]),
+    }
 
 # ── SEVERIDADES ───────────────────────────────────────────────────────────────
 SEVERITY_MAP = {
@@ -86,16 +146,18 @@ TEMPLATE_NAME_ES = {
     "tech-detect":                     "Tecnología web detectada",
 }
 
+# Etiqueta legible de cada tag. Sin codigos de control: esos los aporta el
+# framework de cumplimiento activo (config/compliance/), que es intercambiable.
 TAG_TO_CATEGORY = {
-    "ssl":              "Configuración TLS/SSL (A02:2021)",
+    "ssl":              "Configuración TLS/SSL",
     "dmarc":            "Seguridad de correo electrónico",
     "spf":              "Seguridad de correo electrónico",
-    "exposure":         "Exposición de información sensible (A01:2021)",
-    "misconfiguration": "Mala configuración de seguridad (A05:2021)",
-    "config":           "Mala configuración de seguridad (A05:2021)",
+    "exposure":         "Exposición de información sensible",
+    "misconfiguration": "Mala configuración de seguridad",
+    "config":           "Mala configuración de seguridad",
     "dns":              "Configuración DNS",
-    "headers":          "Cabeceras HTTP de seguridad (A05:2021)",
-    "default-login":    "Credenciales por defecto (A07:2021)",
+    "headers":          "Cabeceras HTTP de seguridad",
+    "default-login":    "Credenciales por defecto",
     "panel":            "Panel de administración expuesto",
     "cve":              "Vulnerabilidad conocida (CVE)",
     "wordpress":        "CMS WordPress",
@@ -149,15 +211,20 @@ CONTINUITY_RISK_BY_TAG = {
     "token":            "Bajo",
 }
 
-REMEDIATION_COSTS = {
-    "dmarc_none":      {"label": "Configurar DMARC con política p=reject",      "cost_uf": 1.5},
-    "dmarc_p_none":    {"label": "Endurecer DMARC de p=none a p=reject",        "cost_uf": 1.0},
-    "spf_softfail":    {"label": "Cambiar SPF de ~all a -all",                  "cost_uf": 0.5},
-    "spf_absent":      {"label": "Implementar registro SPF",                    "cost_uf": 1.0},
-    "tls_absent":      {"label": "Activar TLS/STARTTLS en servidor MX",         "cost_uf": 2.0},
-    "mta_sts_missing": {"label": "Implementar MTA-STS y reporting",             "cost_uf": 1.5},
-    "dnssec_absent":   {"label": "Activar DNSSEC en zona DNS",                  "cost_uf": 1.5},
+# Esfuerzo de remediacion: low | medium | high.
+# Es una estimacion de trabajo tecnico, NO un precio. El motor no emite
+# valores monetarios en ninguna parte del informe.
+REMEDIATION_EFFORT = {
+    "dmarc_none":      {"label": "Configurar DMARC con política p=reject",  "effort": "medium"},
+    "dmarc_p_none":    {"label": "Endurecer DMARC de p=none a p=reject",    "effort": "low"},
+    "spf_softfail":    {"label": "Cambiar SPF de ~all a -all",              "effort": "low"},
+    "spf_absent":      {"label": "Implementar registro SPF",                "effort": "low"},
+    "tls_absent":      {"label": "Activar TLS/STARTTLS en servidor MX",     "effort": "medium"},
+    "mta_sts_missing": {"label": "Implementar MTA-STS y reporting",         "effort": "medium"},
+    "dnssec_absent":   {"label": "Activar DNSSEC en zona DNS",              "effort": "high"},
 }
+
+EFFORT_ORDER = {"low": 0, "medium": 1, "high": 2}
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 def load_json_lines(path: Path) -> list:
@@ -469,7 +536,7 @@ def parse_dmarc(dmarc_data: dict | None, finding_offset: int = 0):
             })
             formal.append(make_finding(
                 idx=idx, name=f"Servidor de correo sin TLS ({hostname})", severity="high",
-                category="Configuración TLS/SSL (A02:2021)", host=hostname,
+                category="Configuración TLS/SSL", host=hostname,
                 description=(
                     f"El servidor de correo {hostname} no tiene TLS habilitado. "
                     "Los correos entre servidores viajan en texto plano y pueden "
@@ -607,21 +674,25 @@ def parse_nmap_findings(nmap_data: dict | None, finding_offset: int = 0) -> list
 
 
 def generate_impact_scenarios(dmarc_data: dict | None, domain: str, client: str) -> dict:
-    """Genera escenarios de impacto en el negocio a partir de hallazgos de correo."""
+    """Escenarios de riesgo tecnico derivados de los hallazgos de correo.
+
+    Describe consecuencias operacionales, no financieras: el motor no emite
+    valores monetarios ni referencias normativas. El encuadre de cumplimiento
+    lo aporta el framework activo (config/compliance/).
+    """
     scenarios = []
+    empty = {
+        "scenarios":         scenarios,
+        "remediation_items": [],
+        "remediation_effort": None,
+        "remediation_note": (
+            "El esfuerzo indicado es una estimacion de trabajo tecnico de "
+            "configuracion; no incluye validacion ni monitoreo posterior."
+        ),
+    }
 
     if not dmarc_data:
-        return {
-            "scenarios": scenarios,
-            "legal_obligations": [],
-            "remediation_items": [],
-            "remediation_total_uf": 0,
-            "incident_cost_min_uf": 500,
-            "incident_cost_max_uf": 5000,
-            "max_multa_utm": 20000,
-            "max_multa_clp_aprox": "1.480 millones",
-            "remediation_note": "",
-        }
+        return empty
 
     dmarc  = dmarc_data.get("dmarc", {})
     spf    = dmarc_data.get("spf", {})
@@ -639,481 +710,128 @@ def generate_impact_scenarios(dmarc_data: dict | None, domain: str, client: str)
             severity     = "Crítico"
             trigger      = "dmarc_none"
         else:
-            trigger_desc = f"El dominio @{domain} tiene DMARC activo pero con política p=none, que solo monitorea sin bloquear."
+            trigger_desc = (f"El dominio @{domain} tiene DMARC en p=none: la política "
+                            f"no instruye rechazar ni poner en cuarentena.")
             severity     = "Alto"
             trigger      = "dmarc_p_none"
 
         scenarios.append({
-            "title":    "Fraude BEC — Suplantación de Identidad por Correo",
+            "title":    "Suplantación de identidad por correo (BEC)",
             "severity": severity,
             "trigger":  trigger,
             "description": (
-                f"{trigger_desc} Cualquier atacante puede enviar correos suplantando @{domain} "
-                f"a clientes, proveedores o autoridades sin restricción técnica. En un estudio jurídico "
-                f"esto permite emitir instrucciones falsas de pago, modificar plazos procesales "
-                f"o suplantar comunicaciones con tribunales."
+                f"{trigger_desc} Sin una política DMARC que instruya al receptor, un "
+                f"tercero puede enviar correo con el dominio {domain} en el remitente "
+                f"y los servidores de destino no tienen una señal para rechazarlo."
             ),
-            "attack_vector": "Email spoofing → instrucción falsa → transferencia o acción fraudulenta",
-            "financial_impact": (
-                "Fraude promedio BEC en Latinoamérica: USD 62.000 por incidente (FBI IC3 2023). "
-                "Para PYMES chilenas: pérdidas estimadas entre UF 500–5.000 por evento. "
-                "Bajo la Ley 21.719, un incidente que exponga datos personales puede derivar "
-                "en multas de hasta 10.000 UTM (~CLP 740 millones)."
+            "attack_vector": "Email spoofing → instrucción falsa → acción del destinatario",
+            "operational_impact": (
+                "Correo fraudulento con remitente aparentemente legítimo puede llegar a "
+                "destinatarios internos y externos. Sin registros DMARC agregados, la "
+                "organización no tiene visibilidad de los envíos que suplantan su dominio."
             ),
             "reputational_impact": (
-                f"Los clientes de {client} pueden recibir correos fraudulentos que parecen legítimos. "
-                "La obligación de notificar a la APDP y a los afectados dentro de 72 horas "
-                "agrava el impacto reputacional y puede derivar en demandas de responsabilidad civil."
-            ),
-            "sector_note": (
-                "Para estudios jurídicos, clínicas y oficinas contables, la suplantación de "
-                "correo permite acceder a datos personales sensibles (información médica, "
-                "judicial, financiera). La Ley 21.719 exige consentimiento explícito para "
-                "datos sensibles — un compromiso de correo destruye esa cadena de consentimiento."
+                f"Los destinatarios no pueden distinguir un correo suplantado de uno "
+                f"emitido por {client}. La confianza en el canal de correo del dominio "
+                f"se degrada para todos sus interlocutores."
             ),
         })
 
-    # ── ESCENARIO 2: SPOOFING PARCIAL (SPF softfail o ausente) ───────────────
+    # ── ESCENARIO 2: SPF ausente ─────────────────────────────────────────────
     if not spf_valid:
         scenarios.append({
-            "title":    "Suplantación Total del Dominio por Correo",
+            "title":    "Ausencia de restricción de origen (SPF)",
             "severity": "Alto",
             "trigger":  "spf_absent",
             "description": (
-                f"Sin registro SPF válido en {domain}, cualquier servidor puede enviar "
-                f"correos como @{domain} sin restricción técnica alguna. "
-                f"No existe barrera que diferencie correos legítimos de fraudulentos."
+                f"Sin registro SPF válido en {domain}, no existe una lista de servidores "
+                f"autorizados a enviar correo por el dominio. Cualquier servidor puede "
+                f"originar correo con ese remitente."
             ),
-            "attack_vector": "Sin barrera SPF → suplantación trivial desde cualquier servidor",
-            "financial_impact": (
-                "Campaña de phishing masiva contra clientes puede resultar en demandas. "
-                "Costo estimado de limpieza de reputación de dominio y notificación: UF 15–80. "
-                "Sanción bajo Ley 21.719 por tratamiento inseguro de datos personales: hasta 10.000 UTM."
+            "attack_vector": "Sin barrera SPF → envío desde infraestructura arbitraria",
+            "operational_impact": (
+                "El dominio queda sin el control de origen más básico del correo. "
+                "La reputación del dominio ante filtros antispam puede degradarse por "
+                "envíos de terceros."
             ),
             "reputational_impact": (
-                f"Imposible demostrar ante clientes que un correo fraudulento no fue enviado por {client}. "
-                "La reputación del dominio puede ser degradada en listas negras de correo."
-            ),
-            "sector_note": (
-                "Phishing dirigido a clientes constituye uso no autorizado de la identidad "
-                "del responsable del tratamiento. Las víctimas pueden ejercer derechos ARCO "
-                "(acceso, rectificación, cancelación, oposición) y exigir explicaciones bajo "
-                "Art. 5° de la Ley 21.719."
+                f"No es posible demostrar técnicamente que un correo fraudulento no "
+                f"fue originado por {client}."
             ),
         })
     elif spf_valid and "-all" not in spf_record:
         scenarios.append({
-            "title":    "Spoofing Parcial — Correos desde Servidores No Autorizados",
+            "title":    "Restricción de origen permisiva (SPF ~all)",
             "severity": "Medio",
             "trigger":  "spf_softfail",
             "description": (
-                f"El SPF de {domain} usa ~all (softfail): servidores no autorizados pueden "
-                f"enviar correos que algunos sistemas antispam aceptan. Un atacante puede "
-                f"usar infraestructura de terceros para distribuir phishing en nombre de {client}."
+                f"El SPF de {domain} termina en ~all (softfail): el registro declara qué "
+                f"servidores son legítimos, pero indica al receptor que acepte igualmente "
+                f"el correo de los demás, marcándolo como sospechoso."
             ),
-            "attack_vector": "SPF ~all bypass → phishing dirigido → robo de credenciales o fraude",
-            "financial_impact": (
-                "Campañas dirigidas a clientes pueden resultar en demandas por daños. "
-                "Corrección de ~all a -all: costo técnico mínimo, impacto preventivo alto."
+            "attack_vector": "SPF ~all → el receptor acepta correo de origen no autorizado",
+            "operational_impact": (
+                "El correo enviado desde servidores no autorizados puede ser entregado "
+                "en lugar de rechazado. Cambiar ~all por -all es una modificación de un "
+                "solo registro DNS."
             ),
             "reputational_impact": (
-                "Los correos phishing pueden circular durante días antes de ser detectados. "
-                "Cada cliente afectado representa un riesgo legal para la organización."
-            ),
-            "sector_note": (
-                "Phishing dirigido a clientes constituye uso no autorizado de la identidad "
-                "del responsable del tratamiento. Las víctimas pueden ejercer derechos ARCO "
-                "(acceso, rectificación, cancelación, oposición) y exigir explicaciones bajo "
-                "Art. 5° de la Ley 21.719."
+                "El correo suplantado puede circular sin ser rechazado en origen."
             ),
         })
 
-    # ── ESCENARIO 3: INTERCEPTACIÓN DE CORREOS (TLS ausente) ─────────────────
+    # ── ESCENARIO 3: transporte sin cifrar (TLS ausente) ─────────────────────
     for host_entry in mx.get("hosts", []):
         hostname = host_entry.get("hostname", "")
         if not host_entry.get("tls") and not host_entry.get("starttls"):
             scenarios.append({
-                "title":    f"Interceptación de Correos en Tránsito ({hostname})",
+                "title":    f"Transporte de correo sin cifrar ({hostname})",
                 "severity": "Alto",
                 "trigger":  "tls_absent",
                 "description": (
-                    f"El servidor de correo {hostname} no cifra las conexiones SMTP. "
-                    f"Los correos entre servidores viajan en texto plano y pueden ser "
-                    f"interceptados, leídos o modificados por cualquier actor con acceso "
-                    f"a la ruta de red — incluyendo documentos y datos personales adjuntos."
+                    f"El servidor de correo {hostname} no ofrece TLS ni STARTTLS. El "
+                    f"correo entre servidores viaja en texto plano y puede ser leído o "
+                    f"modificado por cualquier actor con acceso a la ruta de red."
                 ),
-                "attack_vector": "MITM en tránsito SMTP → lectura o modificación de correos sin detección",
-                "financial_impact": (
-                    "Una filtración de correspondencia confidencial puede anular contratos, "
-                    "comprometer estrategias legales y generar demandas de clientes afectados. "
-                    "Costo estimado de un incidente de este tipo: UF 200–2.000."
+                "attack_vector": "MITM en tránsito SMTP → lectura o modificación sin detección",
+                "operational_impact": (
+                    "El contenido de los mensajes y sus adjuntos queda expuesto en "
+                    "tránsito. La modificación en ruta no deja rastro para el receptor."
                 ),
                 "reputational_impact": (
-                    "La revelación de comunicaciones privilegiadas daña de forma permanente "
-                    "la reputación ante clientes y pares del sector."
-                ),
-                "sector_note": (
-                    "Datos personales transmitidos sin cifrado constituyen infracción directa al "
-                    "deber de seguridad del Art. 14 ter. Para datos sensibles (salud, datos "
-                    "biométricos, información jurídica privilegiada), califica como infracción "
-                    "GRAVÍSIMA — hasta 20.000 UTM."
+                    "La correspondencia con terceros circula sin garantía de "
+                    "confidencialidad ni de integridad."
                 ),
             })
             break
 
-    legal_obligations = [
-        {
-            "law":        "Ley 21.719",
-            "article":    "Art. 14 ter — Medidas de seguridad",
-            "obligation": (
-                "Las organizaciones que tratan datos personales deben implementar medidas "
-                "técnicas y organizativas apropiadas al riesgo del tratamiento. La configuración "
-                "de correo electrónico (DMARC/SPF/TLS) es un control técnico básico exigible, "
-                "especialmente al manejar datos sensibles como información médica, jurídica o financiera."
-            ),
-            "consequence": (
-                "Infracción grave: hasta 10.000 UTM (~CLP 740 millones). "
-                "Para PYMEs durante el primer año de vigencia (diciembre 2026 - diciembre 2027), "
-                "la sanción es amonestación pública en el Registro Nacional de Sanciones y Cumplimiento. "
-                "Después de ese período, las multas aplican plenamente."
-            ),
-        },
-        {
-            "law":        "Ley 21.719",
-            "article":    "Art. 14 quinquies — Notificación de brechas",
-            "obligation": (
-                "Obligación de notificar a la Agencia de Protección de Datos Personales (APDP) "
-                "y a los titulares afectados dentro de 72 horas ante una brecha de seguridad "
-                "que represente riesgo para los derechos de las personas. La notificación debe "
-                "incluir naturaleza de la brecha, datos afectados y medidas adoptadas."
-            ),
-            "consequence": (
-                "Omitir o demorar la notificación califica como infracción gravísima: "
-                "hasta 20.000 UTM (~CLP 1.480 millones) o 4% de los ingresos anuales en "
-                "caso de reincidencia. Las sanciones se publican en el Registro Nacional "
-                "de Sanciones por 5 años."
-            ),
-        },
-        {
-            "law":        "Ley 21.719",
-            "article":    "Art. 14 bis — Registro de actividades de tratamiento",
-            "obligation": (
-                "Mantener un registro actualizado de las actividades de tratamiento de datos "
-                "personales. La APDP fiscaliza evidencia operativa — logs, inventarios y "
-                "registros datados — no solo políticas. Las medidas de seguridad técnicas "
-                "deben ser demostrables."
-            ),
-            "consequence": (
-                "La falta de registro o evidencia técnica documentada se considera infracción "
-                "leve a grave según gravedad: 1-10.000 UTM. La existencia de vulnerabilidades "
-                "conocidas sin remediación documentada agrava cualquier sanción."
-            ),
-        },
-    ]
-
+    # ── Plan de remediación: esfuerzo, nunca precio ──────────────────────────
     remediation_items = []
-    total_uf = 0
     triggers_vistos = set()
     for scenario in scenarios:
         t = scenario.get("trigger")
-        if t and t in REMEDIATION_COSTS and t not in triggers_vistos:
-            item = REMEDIATION_COSTS[t]
+        if t and t in REMEDIATION_EFFORT and t not in triggers_vistos:
+            item = REMEDIATION_EFFORT[t]
             remediation_items.append({
-                "label":   item["label"],
-                "cost_uf": item["cost_uf"],
+                "label":  item["label"],
+                "effort": item["effort"],
             })
-            total_uf += item["cost_uf"]
             triggers_vistos.add(t)
+
+    # Esfuerzo agregado = el mayor de los items, no una suma.
+    total_effort = None
+    if remediation_items:
+        total_effort = max(
+            (i["effort"] for i in remediation_items),
+            key=lambda e: EFFORT_ORDER.get(e, 0),
+        )
 
     return {
-        "scenarios":            scenarios,
-        "legal_obligations":    legal_obligations,
-        "remediation_items":    remediation_items,
-        "remediation_total_uf": total_uf,
-        "incident_cost_min_uf": 500,
-        "incident_cost_max_uf": 5000,
-        "max_multa_utm":        20000,
-        "max_multa_clp_aprox":  "1.480 millones",
-        "remediation_note": (
-            "La remediación de los hallazgos identificados tiene un costo técnico "
-            "documentado y se ejecuta una sola vez. El ROI frente al costo potencial "
-            "de un incidente y las multas asociadas a la Ley 21.719 es excepcional."
-        ),
+        "scenarios":          scenarios,
+        "remediation_items":  remediation_items,
+        "remediation_effort": total_effort,
+        "remediation_note":   empty["remediation_note"],
     }
-
-
-# ── MARCO LEY 21.663 — LEY MARCO DE CIBERSEGURIDAD ────────────────────────────
-# Multas del Art. 40 de la Ley 21.663. Conversión referencial (mayo 2026):
-# 1 UTM ≈ CLP 74.000 · 1 UF ≈ CLP 39.500  →  1 UTM ≈ 1,87 UF
-M_LEVE      = "5.000 UTM (≈ UF 9.400)"
-M_GRAVE     = "10.000 UTM (≈ UF 18.700)"
-M_GRAVISIMA = "20.000 UTM (≈ UF 37.500)"
-M_OIV       = "40.000 UTM (≈ UF 75.000)"
-
-
-def _ciber_legal_obligations() -> list:
-    """Deberes de la Ley 21.663 relevantes para un proveedor de servicios esenciales."""
-    return [
-        {
-            "law":     "Ley 21.663",
-            "article": "Art. 7° — Deberes generales de ciberseguridad",
-            "obligation": (
-                "Toda institución obligada debe aplicar de forma permanente medidas "
-                "para prevenir, reportar y resolver incidentes de ciberseguridad. La "
-                "configuración de correo electrónico (DMARC/SPF/TLS), DNS y superficie "
-                "web son controles técnicos básicos y exigibles. La ANCI fiscaliza "
-                "evidencia técnica operativa, no solo políticas documentadas."
-            ),
-            "consequence": (
-                f"El incumplimiento de estos deberes se sanciona con multas de {M_LEVE} "
-                f"a {M_GRAVE} para la institución obligada. Como su cliente OIV responde "
-                f"ante la ANCI por estos controles en toda su cadena de suministro, exigirá "
-                f"evidencia de que su empresa los aplica; no poder acreditarlo lo descarta "
-                f"como proveedor."
-            ),
-        },
-        {
-            "law":     "Ley 21.663",
-            "article": "Art. 9° — Deber de reportar al CSIRT Nacional",
-            "obligation": (
-                "Ante un ciberataque o incidente con efectos significativos existe la "
-                "obligación de enviar una alerta temprana al CSIRT Nacional dentro de "
-                "3 horas, una actualización dentro de 72 horas y un reporte final "
-                "dentro de 15 días corridos. Una infraestructura vulnerable hace "
-                "materialmente imposible detectar y reportar un incidente a tiempo."
-            ),
-            "consequence": (
-                f"Esta obligación recae sobre su cliente OIV, cuya infracción gravísima "
-                f"se sanciona con multas de hasta {M_OIV}. Una infraestructura suya que "
-                f"impida detectar a tiempo un incidente que lo afecte compromete su "
-                f"capacidad de reportar y, con ello, su continuidad como proveedor."
-            ),
-        },
-        {
-            "law":     "Ley 21.663",
-            "article": "Art. 8° — Cadena de suministro de los Operadores de Importancia Vital",
-            "obligation": (
-                "Los Operadores de Importancia Vital deben implementar un Sistema de "
-                "Gestión de Seguridad de la Información (SGSI) continuo que cubre los "
-                "riesgos de sus redes y sistemas, incluidos los introducidos por sus "
-                "proveedores. Su cliente está legalmente obligado a verificar y exigir "
-                "la seguridad de los terceros que lo abastecen."
-            ),
-            "consequence": (
-                f"Su cliente OIV está legalmente obligado a verificar y exigir la "
-                f"seguridad de sus proveedores. Un proveedor que no pueda acreditar "
-                f"control de su seguridad cuando la ANCI lo requiera es excluido del "
-                f"registro de proveedores y pierde el contrato. Las multas de hasta "
-                f"{M_OIV} recaen sobre el OIV, lo que le da un incentivo directo para "
-                f"sustituir a los proveedores no conformes antes de una auditoría."
-            ),
-        },
-    ]
-
-
-def generate_impact_scenarios_ciber(dmarc_data: dict | None, domain: str, client: str) -> dict:
-    """Escenarios de impacto bajo la Ley 21.663 — Ley Marco de Ciberseguridad.
-
-    Audiencia: empresas proveedoras de operadores de servicios esenciales y de
-    Operadores de Importancia Vital (OIV). Reformula los hallazgos OSINT como
-    riesgo de incumplimiento de los deberes de ciberseguridad y como vector de
-    ataque hacia la infraestructura crítica del cliente final.
-    """
-    scenarios = []
-    result = {
-        "scenarios":            scenarios,
-        "legal_obligations":    [],
-        "remediation_items":    [],
-        "remediation_total_uf": 0,
-        "incident_cost_min_uf": 800,
-        "incident_cost_max_uf": 8000,
-        "max_multa_utm":        20000,
-        "max_multa_uf":         "37.500",
-        "max_multa_clp_aprox":  "1.480 millones",
-        "multa_gravisima":      M_GRAVISIMA,
-        "multa_oiv":            M_OIV,
-        "remediation_note": (
-            f"La remediación de los hallazgos identificados tiene un costo técnico "
-            f"documentado y se ejecuta una sola vez. Frente a la pérdida del contrato "
-            f"con su cliente OIV —que enfrenta multas de la ANCI de hasta {M_OIV} y por "
-            f"ley debe exigir seguridad a toda su cadena de suministro—, la inversión en "
-            f"remediación es marginal."
-        ),
-    }
-    if not dmarc_data:
-        return result
-
-    dmarc = dmarc_data.get("dmarc", {})
-    spf   = dmarc_data.get("spf", {})
-    mx    = dmarc_data.get("mx", {})
-
-    dmarc_valid  = dmarc.get("valid", False)
-    dmarc_policy = dmarc.get("tags", {}).get("p", {}).get("value", "none") if dmarc_valid else None
-    spf_valid    = spf.get("valid", False)
-    spf_record   = spf.get("record", "")
-
-    # ── ESCENARIO 1: SUPLANTACIÓN DEL PROVEEDOR (DMARC ausente / p=none) ──────
-    if not dmarc_valid or dmarc_policy in ("none", None):
-        if not dmarc_valid:
-            trigger_desc = f"El dominio @{domain} no tiene DMARC configurado."
-            severity     = "Crítico"
-            trigger      = "dmarc_none"
-        else:
-            trigger_desc = (f"El dominio @{domain} tiene DMARC activo pero con política "
-                            f"p=none, que solo monitorea sin bloquear.")
-            severity     = "Alto"
-            trigger      = "dmarc_p_none"
-        scenarios.append({
-            "title":    "Suplantación del Proveedor — Compromiso de la Cadena de Suministro",
-            "severity": severity,
-            "trigger":  trigger,
-            "description": (
-                f"{trigger_desc} Cualquier atacante puede enviar correos haciéndose pasar "
-                f"por @{domain}. Para un proveedor de operadores de servicios esenciales, "
-                f"esto convierte a {client} en el eslabón débil de la cadena de suministro: "
-                f"un atacante puede dirigir correos fraudulentos —con instrucciones de pago, "
-                f"facturas o archivos maliciosos— al operador de servicios esenciales que es "
-                f"su cliente, usando la confianza de la relación comercial como vector de "
-                f"entrada hacia su infraestructura crítica."
-            ),
-            "attack_vector": "Email spoofing del proveedor → correo de confianza al operador esencial → acceso inicial a infraestructura crítica",
-            "financial_impact": (
-                f"Un ataque a la cadena de suministro que interrumpa un servicio esencial "
-                f"expone a su cliente OIV a sanciones de la ANCI de hasta {M_OIV} por "
-                f"infracción gravísima. Aunque su empresa no sea la sancionada, ser el "
-                f"vector de entrada del incidente implica la terminación del contrato y la "
-                f"exclusión de la cadena de suministro, además del costo de la interrupción "
-                f"operacional."
-            ),
-            "reputational_impact": (
-                "Ser identificado como el origen de un incidente que afectó a un operador "
-                "de servicios esenciales implica la exclusión de los registros de proveedores "
-                "y la pérdida de futuras licitaciones. La ANCI puede ordenar la publicación "
-                "de la infracción del operador afectado, lo que hace pública la falla en su "
-                "cadena de suministro."
-            ),
-            "sector_note": (
-                "El Art. 7° de la Ley 21.663 obliga a aplicar permanentemente medidas para "
-                "prevenir incidentes. El Art. 8° exige a los Operadores de Importancia Vital "
-                "gestionar los riesgos de su cadena de suministro: su cliente está obligado "
-                "por ley a verificar la seguridad de sus proveedores."
-            ),
-        })
-
-    # ── ESCENARIO 2: SUPLANTACIÓN TOTAL DEL DOMINIO (SPF) ────────────────────
-    if not spf_valid:
-        scenarios.append({
-            "title":    "Suplantación Total del Dominio — Vector de Ataque a Servicios Esenciales",
-            "severity": "Alto",
-            "trigger":  "spf_absent",
-            "description": (
-                f"Sin registro SPF válido en {domain}, cualquier servidor puede enviar "
-                f"correos como @{domain} sin restricción técnica alguna. No existe barrera "
-                f"que diferencie un correo legítimo de {client} de uno fraudulento dirigido "
-                f"a su cliente operador de servicios esenciales."
-            ),
-            "attack_vector": "Sin barrera SPF → suplantación trivial → phishing dirigido al operador esencial",
-            "financial_impact": (
-                "Una campaña de phishing que use la identidad de la empresa como puerta de "
-                "entrada a un operador de servicios esenciales puede provocar un incidente "
-                "que exponga a su cliente a sanciones de la ANCI y derive en la terminación "
-                "anticipada de su contrato. La corrección de SPF tiene costo técnico mínimo "
-                "e impacto preventivo alto."
-            ),
-            "reputational_impact": (
-                f"Es imposible demostrar ante el operador esencial que un correo fraudulento "
-                f"no fue enviado por {client}. El dominio puede ser degradado en listas negras, "
-                f"afectando toda la comunicación operativa con el cliente."
-            ),
-            "sector_note": (
-                "Los controles de correo son parte de los deberes del Art. 7° de la Ley "
-                "21.663 que su cliente OIV debe acreditar en toda su cadena; su ausencia es "
-                "un hallazgo que debilita la posición de la empresa frente a las auditorías "
-                "de ciberseguridad que el operador está obligado a exigirle."
-            ),
-        })
-    elif spf_valid and "-all" not in spf_record:
-        scenarios.append({
-            "title":    "Spoofing Parcial — Correos desde Servidores No Autorizados",
-            "severity": "Medio",
-            "trigger":  "spf_softfail",
-            "description": (
-                f"El SPF de {domain} usa ~all (softfail): servidores no autorizados pueden "
-                f"enviar correos que algunos sistemas antispam aceptan. Un atacante puede usar "
-                f"infraestructura de terceros para distribuir phishing en nombre de {client} "
-                f"hacia su cliente operador de servicios esenciales."
-            ),
-            "attack_vector": "SPF ~all bypass → phishing dirigido → acceso a infraestructura del operador esencial",
-            "financial_impact": (
-                "Las campañas dirigidas al operador esencial pueden derivar en un incidente "
-                "que su cliente deba reportar a la ANCI y que ponga en riesgo su contrato. "
-                "El endurecimiento de ~all a -all tiene costo técnico mínimo y alto impacto "
-                "preventivo."
-            ),
-            "reputational_impact": (
-                "Los correos de phishing pueden circular durante días antes de ser detectados. "
-                "Cada incidente debilita la evaluación de seguridad del proveedor."
-            ),
-            "sector_note": (
-                "El Art. 7° de la Ley 21.663 exige medidas permanentes de prevención a la "
-                "institución obligada; un SPF permisivo es una brecha conocida y documentable "
-                "que su cliente OIV detectará al auditar su cadena de proveedores."
-            ),
-        })
-
-    # ── ESCENARIO 3: INTERCEPTACIÓN DE CORREOS EN TRÁNSITO (TLS ausente) ─────
-    for host_entry in mx.get("hosts", []):
-        hostname = host_entry.get("hostname", "")
-        if not host_entry.get("tls") and not host_entry.get("starttls"):
-            scenarios.append({
-                "title":    f"Interceptación de Comunicaciones con el Operador de Servicios Esenciales ({hostname})",
-                "severity": "Alto",
-                "trigger":  "tls_absent",
-                "description": (
-                    f"El servidor de correo {hostname} no cifra las conexiones SMTP. Los "
-                    f"correos entre servidores viajan en texto plano y pueden ser interceptados, "
-                    f"leídos o modificados por cualquier actor con acceso a la ruta de red — "
-                    f"incluyendo órdenes de servicio, credenciales de acceso y documentación "
-                    f"técnica intercambiada con el operador de servicios esenciales."
-                ),
-                "attack_vector": "MITM en tránsito SMTP → lectura o alteración de comunicaciones con el operador esencial",
-                "financial_impact": (
-                    f"La interceptación de credenciales o instrucciones operativas puede "
-                    f"habilitar un ataque directo a la infraestructura crítica del cliente. "
-                    f"La multa de la ANCI de hasta {M_OIV} recae sobre el operador esencial "
-                    f"afectado; para su empresa, el costo combinado de la interrupción del "
-                    f"servicio, la respuesta al incidente y la pérdida del contrato supera "
-                    f"con creces la inversión en cifrado."
-                ),
-                "reputational_impact": (
-                    "La revelación de comunicaciones operativas confidenciales daña de forma "
-                    "permanente la relación con el operador de servicios esenciales y la "
-                    "posición de la empresa en futuras licitaciones."
-                ),
-                "sector_note": (
-                    "Transmitir información operativa sin cifrado contradice las medidas "
-                    "técnicas apropiadas que exige el Art. 7° de la Ley 21.663 y es un "
-                    "hallazgo recurrente en las auditorías que los OIV aplican a sus "
-                    "proveedores."
-                ),
-            })
-            break
-
-    triggers_vistos = set()
-    total_uf = 0
-    for scenario in scenarios:
-        t = scenario.get("trigger")
-        if t and t in REMEDIATION_COSTS and t not in triggers_vistos:
-            item = REMEDIATION_COSTS[t]
-            result["remediation_items"].append({
-                "label":   item["label"],
-                "cost_uf": item["cost_uf"],
-            })
-            total_uf += item["cost_uf"]
-            triggers_vistos.add(t)
-    result["remediation_total_uf"] = total_uf
-    result["legal_obligations"]    = _ciber_legal_obligations()
-    return result
 
 
 def group_findings(findings: list) -> list:
@@ -1200,7 +918,7 @@ def spanish_date() -> str:
 
 
 def build_report(args, nuclei_findings, email_block, email_formal, technologies,
-                 dmarc_data=None, nmap_findings=None) -> dict:
+                 dmarc_data=None, nmap_findings=None, compliance_fw=None) -> dict:
     # Combinar hallazgos: email → nuclei → nmap; re-numerar IDs
     all_findings = []
     for i, f in enumerate(email_formal + nuclei_findings + (nmap_findings or []), 1):
@@ -1208,96 +926,36 @@ def build_report(args, nuclei_findings, email_block, email_formal, technologies,
         f["id"] = f"VULN-{i:03d}"
         all_findings.append(f)
 
-    if args.report_type == "diagnostico":
+    if args.report_type == "detailed":
         all_findings = group_findings(all_findings)
 
     risk = calculate_risk_score(all_findings)
     date = spanish_date()
 
-    report_type = getattr(args, "report_type", "flash")
-    framework   = getattr(args, "framework", "datos")
+    report_type = getattr(args, "report_type", "summary")
     has_risk    = risk["counts"]["critical"] > 0 or risk["counts"]["high"] > 0
 
-    if framework == "ciber":
-        business_impact = generate_impact_scenarios_ciber(dmarc_data, args.domain, args.client)
-        key_rec = (
-            "Se identificaron vulnerabilidades en la configuración de correo y la "
-            "superficie web de @{domain} que permiten suplantar a {client} y utilizar "
-            "la relación comercial con su cliente como vector de ataque hacia un "
-            "operador de servicios esenciales. Esto constituye un incumplimiento del "
-            "deber de seguridad del Art. 7° de la Ley 21.663 y expone a la empresa a "
-            "sanciones de la ANCI. Se recomienda implementar DMARC con p=reject como "
-            "prioridad inmediata."
-            .format(domain=args.domain, client=args.client)
-            if has_risk
-            else ("No se identificaron vulnerabilidades de alto impacto en el escaneo "
-                  "de superficie. Se recomienda mantener el monitoreo continuo de "
-                  "ciberseguridad exigido por el Art. 7° de la Ley 21.663.")
-        )
-    else:
-        business_impact = generate_impact_scenarios(dmarc_data, args.domain, args.client)
-        key_rec = (
-            "Se identificaron vulnerabilidades en la configuración de correo electrónico "
-            "que permiten la suplantación del dominio (@{domain}). Un atacante puede enviar "
-            "correos haciéndose pasar por {client}, comprometiendo datos personales de clientes "
-            "y vulnerando el deber de seguridad bajo la Ley 21.719. Se recomienda implementar "
-            "DMARC con p=reject como prioridad inmediata."
-            .format(domain=args.domain, client=args.client)
-            if has_risk
-            else "No se identificaron vulnerabilidades de alto impacto en el escaneo de superficie."
-        )
-
-    reputation_sector = detect_reputation_sector(
-        client_name=args.client,
-        domain=args.domain,
-        technologies=technologies,
-        subdomains=[],
+    business_impact = generate_impact_scenarios(dmarc_data, args.domain, args.client)
+    key_rec = (
+        "Se identificaron debilidades en la configuración de correo del dominio "
+        "@{domain} que permiten suplantar el remitente. Se recomienda implementar "
+        "DMARC con política p=reject como prioridad inmediata."
+        .format(domain=args.domain)
+        if has_risk
+        else "No se identificaron hallazgos de alto impacto en el escaneo de superficie."
     )
 
-    if framework == "ciber":
-        appendix = {
-            "ley_marco_ciber_relevance": (
-                "Los hallazgos de este informe se relacionan directamente con la Ley 21.663, "
-                "Ley Marco de Ciberseguridad e Infraestructura Crítica de la Información, que "
-                "crea la Agencia Nacional de Ciberseguridad (ANCI). La ley obliga a las "
-                "instituciones que prestan servicios esenciales —y, a través de los deberes "
-                "de gestión de riesgos de sus operadores, a los proveedores que los abastecen— "
-                "a aplicar medidas de seguridad permanentes (Art. 7°) y a reportar los "
-                "incidentes al CSIRT Nacional dentro de plazos estrictos: alerta temprana en "
-                "3 horas, actualización en 72 horas y reporte final en 15 días corridos "
-                "(Art. 9°). La ANCI fiscaliza evidencia técnica operativa, no solo políticas "
-                "documentadas. Las infracciones se sancionan con multas de hasta 20.000 UTM "
-                "(≈ UF 37.500), que se duplican a 40.000 UTM (≈ UF 75.000) para los "
-                "Operadores de Importancia Vital."
-            ),
-            "owasp_top10_reference": "https://owasp.org/www-project-top-ten/",
-            "nist_framework":        "https://www.nist.gov/cyberframework",
-        }
-    else:
-        appendix = {
-            "ley_proteccion_datos_relevance": (
-                "Los hallazgos de este informe se relacionan directamente con la Ley 21.719 "
-                "de Protección de Datos Personales, que entra en plena vigencia el 1 de diciembre "
-                "de 2026. La ley aplica a toda organización que trate datos personales en Chile, "
-                "sin importar su tamaño. La Agencia de Protección de Datos Personales (APDP) "
-                "fiscaliza evidencia técnica operativa, no solo políticas: medidas de seguridad "
-                "documentadas, registro de tratamientos y notificación oportuna de brechas. "
-                "Para PYMEs, el primer año (diciembre 2026 - diciembre 2027) las sanciones "
-                "se limitan a amonestaciones públicas inscritas en el Registro Nacional de "
-                "Sanciones y Cumplimiento por 5 años."
-            ),
-            "owasp_top10_reference": "https://owasp.org/www-project-top-ten/",
-            "nist_framework":        "https://www.nist.gov/cyberframework",
-        }
+    # Encuadre de cumplimiento: lo aporta el framework activo, no el motor.
+    compliance = build_compliance_block(compliance_fw, all_findings)
 
     return {
         "report_type": report_type,
-        "framework":   framework,
+        "compliance":  compliance,
         "meta": {
             "version":              "1.0",
             "generated_at":         datetime.now().isoformat(),
             "generated_date_human": date,
-            "tool":                 "ciber-workstation / S.I.N.S.",
+            "tool":                 "crowsnest",
             "methodology":          "OSINT pasivo + análisis de superficie no intrusivo",
             "disclaimer": (
                 "Este informe fue generado mediante reconocimiento pasivo e inspección de "
@@ -1321,9 +979,7 @@ def build_report(args, nuclei_findings, email_block, email_formal, technologies,
         "findings":        all_findings,
         "email_security":  email_block,
         "business_impact": business_impact,
-        "technologies":      technologies,
-        "reputation_sector": reputation_sector,
-        "appendix": appendix,
+        "technologies":    technologies,
     }
 
 
@@ -1337,13 +993,12 @@ def main():
     parser.add_argument("--domain",      required=True)
     parser.add_argument("--output",      required=True)
     parser.add_argument("--nmap",        default=None,   help="JSON de nmap (-oJ)")
-    parser.add_argument("--report-type", default="flash",
-                        choices=["flash", "diagnostico", "trabajo"],
-                        help="Tipo de informe: flash (default), diagnostico o trabajo")
-    parser.add_argument("--framework", default="datos",
-                        choices=["datos", "ciber"],
-                        help="Marco legal: datos (Ley 21.719, default) o "
-                             "ciber (Ley 21.663 — Ley Marco de Ciberseguridad)")
+    parser.add_argument("--report-type", default="summary",
+                        choices=["summary", "detailed", "remediation"],
+                        help="Tipo de informe: summary (default), detailed o remediation")
+    parser.add_argument("--compliance", default=None,
+                        help="Id del framework de cumplimiento (config/compliance/). "
+                             "Si se omite, usa COMPLIANCE_FRAMEWORK o el unico disponible.")
     args = parser.parse_args()
 
     print(f"[*] Procesando hallazgos de nuclei: {args.input}")
@@ -1367,9 +1022,15 @@ def main():
                                             finding_offset=len(email_formal) + len(nuclei_findings))
         print(f"[+] {len(nmap_findings)} hallazgos de nmap procesados")
 
+    compliance_fw = load_compliance(args.compliance)
+    if compliance_fw:
+        print(f"[*] Framework de cumplimiento: {compliance_fw.get('name')} "
+              f"({compliance_fw.get('id')})")
+
     print(f"[*] Construyendo informe ({args.report_type})...")
     report = build_report(args, nuclei_findings, email_block, email_formal, technologies,
-                          dmarc_data=dmarc_data, nmap_findings=nmap_findings)
+                          dmarc_data=dmarc_data, nmap_findings=nmap_findings,
+                          compliance_fw=compliance_fw)
 
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)

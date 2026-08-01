@@ -71,7 +71,6 @@ def _build(cmd: str, params: dict) -> tuple[list, str | None]:
             py, str(WRAPPERS_DIR / "report.py"),
             params.get("dominio", ""),
             params.get("nombre", ""),
-            "ciber" if params.get("ciber") else "",
         ], None
 
     if cmd == "diagnostico":

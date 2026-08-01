@@ -5,7 +5,6 @@
 #   ./sins.sh targets enriquecer → enriquece targets con OpenClaw (LLM)
 #   ./sins.sh recon        → recon pasivo de targets (sin Docker, ~10 seg/dominio)
 #   ./sins.sh report       → genera informe completo (con Docker, ~20 min)
-#   ./sins.sh report --ciber → informes con marco Ley 21.663 (Ley Marco de Ciberseguridad)
 #
 # Compatibilidad: Fedora KDE · Ubuntu · WSL2 (Windows 11)
 # =============================================================================
@@ -155,7 +154,7 @@ from lib.states import QUEUED, RECON
 db_path        = Path(sys.argv[1])
 dominio        = sys.argv[2]
 nombre         = sys.argv[3]
-flash_json     = Path(sys.argv[4])
+report_json    = Path(sys.argv[4])
 session_folder = sys.argv[5]
 
 db = json.loads(db_path.read_text()) if db_path.exists() else {"version": 1, "targets": {}}
@@ -174,10 +173,10 @@ d["report_at"] = datetime.now().isoformat(timespec="seconds")
 
 sev_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
 try:
-    flash = json.loads(flash_json.read_text())
-    es = flash.get("executive_summary", {}) or {}
+    rep = json.loads(report_json.read_text())
+    es = rep.get("executive_summary", {}) or {}
     by_sev = es.get("findings_by_severity", {}) or {}
-    findings = flash.get("findings", []) or []
+    findings = rep.get("findings", []) or []
     ordered = sorted(findings, key=lambda f: (
         f.get("severity_priority", sev_rank.get(f.get("severity"), 99)),
         str(f.get("id", "")),
@@ -205,7 +204,7 @@ try:
 except Exception as e:
     # Si falla la extracción, al menos persiste session_folder
     d.setdefault("scan_data", {})["session_folder"] = session_folder
-    print(f"[!] No se pudo extraer scan_data completo de {flash_json.name}: {e}")
+    print(f"[!] No se pudo extraer scan_data completo de {report_json.name}: {e}")
 
 if d.get("status") in (None, QUEUED):
     d["status"] = RECON
@@ -522,23 +521,10 @@ cmd_report() {
     check_docker_running
     check_container_built
 
-    # ── Flag --ciber: informes con marco Ley 21.663 (Ley Marco de Ciberseguridad) ─
-    # ./sins.sh report --ciber dominio.cl  → 2 PDF orientados a proveedores de
-    # operadores de servicios esenciales (en vez del marco Ley 21.719 por defecto).
-    local FRAMEWORK="datos"
-    local -a _FARGS=()
-    for _a in "$@"; do
-        case "$_a" in
-            --ciber) FRAMEWORK="ciber" ;;
-            *)       _FARGS+=("$_a") ;;
-        esac
-    done
-    set -- "${_FARGS[@]+"${_FARGS[@]}"}"
-
     # ── Modo directo (no-interactivo) ─────────────────────────────────────────
     # ./sins.sh report dominio.cl "Nombre Empresa"  → salta el menú de prioritarios
     if [[ -n "${1:-}" ]]; then
-        _run_report "$1" "${2:-$1}" "$FRAMEWORK"
+        _run_report "$1" "${2:-$1}"
         return
     fi
 
@@ -607,36 +593,24 @@ PYEOF
     read -r confirm
     [[ "${confirm,,}" != "s" ]] && { warn "Cancelado."; exit 0; }
 
-    _run_report "$DOMINIO" "$CLIENTE" "$FRAMEWORK"
+    _run_report "$DOMINIO" "$CLIENTE"
 }
 
 _run_report() {
     local DOMINIO="$1"
     local CLIENTE="$2"
-    local FRAMEWORK="${3:-datos}"
     local TIMESTAMP; TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
     local SAFE_DOM="${DOMINIO//./_}"
     local SESSION_DIR="${REPORTES_DIR}/${SAFE_DOM}_${TIMESTAMP}"
 
-    # ── Variantes según el marco legal del informe ───────────────────────────
-    # datos → Ley 21.719 (Protección de Datos)  ·  ciber → Ley 21.663 (Ciberseguridad)
-    local FW_LABEL DB_REPORT_KEY DB_DETAIL_KEY REPORT_BASE DETAIL_BASE
-    local JSON_REPORT JSON_DETAIL COMMIT_MSG
-    if [[ "${FRAMEWORK}" == "ciber" ]]; then
-        FW_LABEL="Ley 21.663 — Ley Marco de Ciberseguridad"
-        DB_REPORT_KEY="report_pdf";  DB_DETAIL_KEY="detailed_report_pdf"
-        REPORT_BASE="SINS_Flash_Ciber";   DETAIL_BASE="SINS_Diagnostico_Ciber"
-        JSON_REPORT="flash_ciber_${SAFE_DOM}.json"
-        JSON_DETAIL="diagnostico_ciber_${SAFE_DOM}.json"
-        COMMIT_MSG="db: flash ciber ${DOMINIO}"
-    else
-        FW_LABEL="Ley 21.719 — Protección de Datos Personales"
-        DB_REPORT_KEY="report_pdf";  DB_DETAIL_KEY="detailed_report_pdf"
-        REPORT_BASE="SINS_Flash";   DETAIL_BASE="SINS_Diagnostico"
-        JSON_REPORT="flash_${SAFE_DOM}.json"
-        JSON_DETAIL="diagnostico_${SAFE_DOM}.json"
-        COMMIT_MSG="db: flash ${DOMINIO}"
-    fi
+    # El encuadre de cumplimiento lo elige el motor desde config/compliance/;
+    # aqui solo se nombran los artefactos.
+    local DB_REPORT_KEY="report_pdf"
+    local DB_DETAIL_KEY="detailed_report_pdf"
+    local REPORT_BASE="SINS_Report"
+    local DETAIL_BASE="SINS_Detailed"
+    local JSON_REPORT="report_${SAFE_DOM}.json"
+    local JSON_DETAIL="detailed_${SAFE_DOM}.json"
 
     mkdir -p "${SESSION_DIR}"/{subdomains,email,nuclei,technologies,http}
 
@@ -646,7 +620,7 @@ _run_report() {
 
     docker run --rm \
         --user $(id -u):$(id -g) \
-        --name "sins_flash_${SAFE_DOM}" \
+        --name "crowsnest_report_${SAFE_DOM}" \
         --env-file "${SCRIPT_DIR}/.env" \
         --network bridge \
         -v "${REPORTES_DIR}:/home/work/results:z" \
@@ -677,21 +651,19 @@ _run_report() {
 
     # ── Report JSON ───────────────────────────────────────────────────────────
     # El PDF NO se genera aquí — scripts/generate_pdf.py lo arma desde este JSON.
-    step "Generando JSON del informe (${FW_LABEL})"
+    step "Generando JSON del informe"
     local REPORT_JSON="${AUDIT_DIR}/${JSON_REPORT}"
 
     python3 "${SCRIPT_DIR}/scripts/nuclei_to_report.py" "${COMMON_ARGS[@]}" \
-        --report-type "flash" \
-        --framework   "${FRAMEWORK}" \
+        --report-type "summary" \
         --output "${REPORT_JSON}"
 
     # ── Diagnóstico JSON ──────────────────────────────────────────────────────
-    step "Generando JSON Diagnóstico (${FW_LABEL})"
+    step "Generando JSON detallado"
     local DETAIL_JSON="${AUDIT_DIR}/${JSON_DETAIL}"
 
     python3 "${SCRIPT_DIR}/scripts/nuclei_to_report.py" "${COMMON_ARGS[@]}" \
-        --report-type "diagnostico" \
-        --framework   "${FRAMEWORK}" \
+        --report-type "detailed" \
         --output "${DETAIL_JSON}"
 
     # Registrar scan_data + session_folder en la DB (sin PDFs)
@@ -703,7 +675,6 @@ _run_report() {
     echo -e "${RED}┌─────────────────────────────────────────────────────────┐${NC}"
     echo -e "${RED}│${NC}  ${BGREEN}✓ Escaneo completado — JSONs listos${NC}                     ${RED}│${NC}"
     echo -e "${RED}│${NC}  ${GRAY}${CLIENTE}${NC}"
-    echo -e "${RED}│${NC}  ${GRAY}Marco: ${FW_LABEL}${NC}"
     echo -e "${RED}├─────────────────────────────────────────────────────────┤${NC}"
     echo -e "${RED}│${NC}  Report JSON     : ${GRAY}$(basename "${REPORT_JSON}")${NC}"
     echo -e "${RED}│${NC}  Diagnóstico JSON: ${GRAY}$(basename "${DETAIL_JSON}")${NC}"
@@ -747,7 +718,7 @@ cmd_diagnostico() {
     # Detectar nombre del cliente desde JSON existente
     local EXISTING_JSON CLIENTE
     EXISTING_JSON=$(find "${SESSION_DIR}" \
-        \( -name "flash_${SAFE_DOM}.json" -o -name "diagnostico_${SAFE_DOM}.json" \) \
+        \( -name "report_${SAFE_DOM}.json" -o -name "detailed_${SAFE_DOM}.json" \) \
         2>/dev/null | head -1 || echo "")
     CLIENTE=""
     if [[ -n "$EXISTING_JSON" ]]; then
@@ -797,13 +768,13 @@ _regen_diagnostico() {
     DMARC_JSON=$(find  "${SESSION_DIR}" -name "checkdmarc_${DOMINIO}.json" 2>/dev/null | head -1 || echo "")
     TECH_JSON=$(find   "${SESSION_DIR}" -name "whatweb_${DOMINIO}.json"    2>/dev/null | head -1 || echo "")
 
-    local DETAIL_JSON="${SESSION_DIR}/diagnostico_${SAFE_DOM}.json"
-    local DIAG_PDF="${SESSION_DIR}/SINS_Diagnostico_${SAFE_DOM}_${TIMESTAMP}.pdf"
+    local DETAIL_JSON="${SESSION_DIR}/detailed_${SAFE_DOM}.json"
+    local DIAG_PDF="${SESSION_DIR}/SINS_Detailed_${SAFE_DOM}_${TIMESTAMP}.pdf"
 
     step "Regenerando diagnóstico de impacto PDF (sin nuevo escaneo)"
 
     local -a ARGS=("--client" "${CLIENTE}" "--domain" "${DOMINIO}" \
-                   "--output" "${DETAIL_JSON}" "--report-type" "diagnostico")
+                   "--output" "${DETAIL_JSON}" "--report-type" "detailed")
     if [[ -n "$NUCLEI_JSON" ]]; then
         ARGS+=("--input" "${NUCLEI_JSON}")
     else
@@ -917,7 +888,7 @@ _run_trabajo() {
 
     docker run --rm \
         --user "$(id -u):$(id -g)" \
-        --name "sins_trabajo_${SAFE_DOM}" \
+        --name "crowsnest_remediation_${SAFE_DOM}" \
         --env-file "${SCRIPT_DIR}/.env" \
         --network bridge \
         -v "${REPORTES_DIR}:/home/work/results:z" \
@@ -936,7 +907,7 @@ _run_trabajo() {
     TECH_JSON=$(find   "${AUDIT_DIR}" -name "whatweb_${DOMINIO}.json"    2>/dev/null | head -1 || echo "")
     NMAP_JSON=$(find   "${AUDIT_DIR}" -path "*/nmap/nmap_${DOMINIO}.json" 2>/dev/null | head -1 || echo "")
 
-    INFORME_JSON="${AUDIT_DIR}/trabajo_${SAFE_DOM}.json"
+    INFORME_JSON="${AUDIT_DIR}/remediation_${SAFE_DOM}.json"
     PDF_OUT="${AUDIT_DIR}/SINS_Trabajo_${SAFE_DOM}_${TIMESTAMP}.pdf"
 
     ARGS=("--client" "${CLIENTE}" "--domain" "${DOMINIO}" "--output" "${INFORME_JSON}")
@@ -947,7 +918,7 @@ _run_trabajo() {
     [[ -n "$DMARC_JSON" ]] && ARGS+=("--dmarc" "${DMARC_JSON}")
     [[ -n "$TECH_JSON"  ]] && ARGS+=("--tech"  "${TECH_JSON}")
     [[ -n "$NMAP_JSON"  ]] && ARGS+=("--nmap"  "${NMAP_JSON}")
-    ARGS+=(--report-type trabajo)
+    ARGS+=(--report-type remediation)
 
     python3 "${SCRIPT_DIR}/scripts/nuclei_to_report.py" "${ARGS[@]}"
     python3 "${SCRIPT_DIR}/scripts/generate_pdf.py" \
@@ -1230,11 +1201,9 @@ cmd_help() {
     echo -e "  ${GRAY}Califica targets con checkdmarc (sin Docker).${NC}"
     echo -e "  ${GRAY}Identifica quién tiene DMARC/SPF mal configurado.${NC}"
     echo ""
-    echo -e "  ${WHITE}./sins.sh report${NC}  ${GRAY}[--ciber] [dominio] [\"Nombre\"]${NC}"
-    echo -e "  ${GRAY}Genera Flash + Diagnóstico desde un escaneo Docker (~15 min).${NC}"
-    echo -e "  ${GRAY}Produce SINS_Flash_*.pdf y SINS_Diagnostico_*.pdf en la misma sesión.${NC}"
-    echo -e "  ${GRAY}--ciber: marco Ley 21.663 (Ciberseguridad) para proveedores de${NC}"
-    echo -e "  ${GRAY}         operadores de servicios esenciales — SINS_*_Ciber_*.pdf.${NC}"
+    echo -e "  ${WHITE}./sins.sh report${NC}  ${GRAY}[dominio] [\"Nombre\"]${NC}"
+    echo -e "  ${GRAY}Genera el informe resumido y el detallado desde un escaneo Docker.${NC}"
+    echo -e "  ${GRAY}El marco de cumplimiento se elige en config/compliance/.${NC}"
     echo ""
     echo -e "  ${WHITE}./sins.sh diagnostico${NC}"
     echo -e "  ${GRAY}Regenera solo el PDF de diagnóstico desde la sesión más reciente.${NC}"
