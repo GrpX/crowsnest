@@ -33,6 +33,7 @@ if str(REPO_DIR) not in sys.path:
 
 from auth import SECRET_KEY, auth_bp, get_password, init_auth
 from lib import states
+from lib.branding import logo_svg
 from routes import files_bp, run_bp, stream_bp, targets_bp
 
 app = Flask(__name__,
@@ -42,6 +43,14 @@ app = Flask(__name__,
 app.secret_key = SECRET_KEY
 
 init_auth(app)
+
+
+@app.context_processor
+def inject_branding():
+    """El wordmark viene de templates/crowsnest_logo.svg — fuente unica."""
+    return {"logo_svg": logo_svg()}
+
+
 app.register_blueprint(auth_bp)
 app.register_blueprint(targets_bp)
 app.register_blueprint(run_bp)

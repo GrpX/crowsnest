@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import json, sys, base64
+import json, sys
 from pathlib import Path
 from datetime import datetime
 from jinja2 import Environment, BaseLoader
@@ -42,7 +42,12 @@ def translate_finding_names(data: dict) -> dict:
     return data
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
-LOGO_PATH     = TEMPLATES_DIR / "crowsnest_logo.svg"
+
+# El wordmark tiene una sola fuente: templates/crowsnest_logo.svg via lib.branding.
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from lib.branding import logo_data_uri  # noqa: E402
 
 # Una sola plantilla. Lo que antes eran dos variantes de marco legal ahora se
 # resuelve con el framework de cumplimiento activo (config/compliance/), que el
@@ -55,14 +60,6 @@ EFFORT_LABEL = {
     "medium": "Medio",
     "high":   "Alto",
 }
-
-def get_logo_b64():
-    if LOGO_PATH.exists():
-        with open(LOGO_PATH, 'rb') as f:
-            return "data:image/svg+xml;base64," + base64.b64encode(f.read()).decode()
-    # Logo embebido de emergencia si no existe el archivo
-    svg = '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80"><rect x="0" y="0" width="4" height="80" fill="#C8102E"/><text x="18" y="34" font-family="'Courier New',monospace" font-size="28" font-weight="700" letter-spacing="8" fill="#F5F4F0">Crowsnest</text><line x1="18" y1="42" x2="302" y2="42" stroke="#C8102E" stroke-width="1"/><text x="18" y="58" font-family="'Courier New',monospace" font-size="8" letter-spacing="3.5" fill="#9C9C9C">CROWSNEST</text><circle cx="308" cy="58" r="3" fill="#C8102E"/></svg>'''
-    return "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
 
 def render_html(data, template_path):
     template_str = template_path.read_text(encoding="utf-8")
@@ -87,7 +84,7 @@ if __name__ == "__main__":
     print("[*] Cargando informe...")
     data = json.loads(Path(args.input).read_text(encoding="utf-8"))
     data = translate_finding_names(data)
-    data["logo_b64"] = get_logo_b64()
+    data["logo_b64"] = logo_data_uri()
 
     data["EFFORT_LABEL"] = EFFORT_LABEL
 

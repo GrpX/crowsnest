@@ -238,7 +238,7 @@ p{color:var(--g2);margin-bottom:3mm;line-height:1.65}
 <div class="page cover">
   <div class="stripe"></div>
   <div class="cover-top">
-    <img src="{{ logo_b64 }}" style="height:48px;width:auto" alt="Crowsnest">
+    {% if logo_b64 %}<img src="{{ logo_b64 }}" style="height:48px;width:auto" alt="Crowsnest">{% endif %}
     {% if report_type == 'detailed' %}
     <div class="cover-badge">Detallado · Confidencial</div>
     {% elif report_type == 'remediation' %}
@@ -680,7 +680,7 @@ p{color:var(--g2);margin-bottom:3mm;line-height:1.65}
 <div class="page closing">
   <div class="stripe"></div>
   <div class="closing-body">
-    <img src="{{ logo_b64 }}" style="height:44px;width:auto;opacity:.85" alt="Crowsnest">
+    {% if logo_b64 %}<img src="{{ logo_b64 }}" style="height:44px;width:auto;opacity:.85" alt="Crowsnest">{% endif %}
     <div class="closing-title">La seguridad<br>no es un estado.<br>Es un proceso.</div>
     <p class="closing-p">Los hallazgos de este informe reflejan la superficie expuesta en la fecha de análisis. La remediación de un hallazgo no elimina la necesidad de reevaluar: la superficie cambia con cada despliegue, cada servicio nuevo y cada cambio de DNS.</p>
     <div class="closing-cols">

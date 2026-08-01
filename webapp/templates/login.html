@@ -2,8 +2,7 @@
 {% block body %}
 <div class="login-page">
   <div class="login-box">
-    <div class="login-logo">Crowsnest</div>
-    <p class="login-sub">Crowsnest</p>
+    <div class="login-logo">{{ logo_svg|safe }}</div>
 
     {% with msgs = get_flashed_messages() %}
     {% if msgs %}

@@ -47,23 +47,17 @@ body {
   flex-shrink: 0;
 }
 
+/* El wordmark es el SVG de templates/crowsnest_logo.svg, inyectado por
+   lib/branding.py. Aqui solo se dimensiona. */
 .logo-zone {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
+  align-items: center;
 }
 
-.glitch {
-  color: var(--hazard);
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 3px;
-}
-
-.sub-tag {
-  color: var(--text-dim);
-  font-size: 10px;
-  letter-spacing: 1px;
+.logo-zone svg {
+  height: 30px;
+  width: auto;
+  display: block;
 }
 
 .session-info {
@@ -566,20 +560,15 @@ input[type="checkbox"] {
 }
 
 .login-logo {
-  color: var(--hazard);
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: 4px;
-  text-align: center;
+  display: flex;
+  justify-content: center;
   margin-bottom: 4px;
 }
 
-.login-sub {
-  color: var(--text-dim);
-  font-size: 10px;
-  letter-spacing: 1px;
-  text-align: center;
-  margin-top: -8px;
+.login-logo svg {
+  height: 44px;
+  width: auto;
+  display: block;
 }
 
 .login-box input[type="password"] {
