@@ -1,5 +1,8 @@
 'use strict';
 
+// Fuente unica de estados: lib/states.py -> app.py -> dashboard.html.
+const TARGET_STATES = window.TARGET_STATES || [];
+
 let allTargets = [];
 let currentFilter = 'all';
 let searchQuery = '';
@@ -47,10 +50,15 @@ async function loadTargets(filtro) {
   }
 }
 
+function targetState(t) {
+  const st = (t.status || '').toLowerCase();
+  return TARGET_STATES.includes(st) ? st : (TARGET_STATES[0] || 'queued');
+}
+
 function renderTable() {
   const q = searchQuery.toLowerCase();
   const rows = allTargets.filter(t => {
-    const mf = currentFilter === 'all' ? true : t.status === currentFilter;
+    const mf = currentFilter === 'all' ? true : targetState(t) === currentFilter;
     const ms = !q
       || t.dominio.toLowerCase().includes(q)
       || (t.name || '').toLowerCase().includes(q);
@@ -69,6 +77,52 @@ function renderTable() {
   }
 
   tbody.innerHTML = rows.map(rowHtml).join('');
+  renderMetrics();
+}
+
+// ── METRICS ───────────────────────────────────────────────
+// Solo metricas tecnicas: trabajos por estado, hallazgos por severidad y
+// tasa de error de los jobs. Nada de conversion ni de embudo.
+
+function renderMetrics() {
+  const box = document.getElementById('metrics');
+  if (!box) return;
+
+  const porEstado = {};
+  TARGET_STATES.forEach(st => { porEstado[st] = 0; });
+  let high = 0, medium = 0, total = 0, conScan = 0;
+
+  allTargets.forEach(t => {
+    porEstado[targetState(t)] += 1;
+    if (t.total_findings != null) {
+      conScan += 1;
+      total += t.total_findings || 0;
+      high += t.high_findings || 0;
+      medium += t.medium_findings || 0;
+    }
+  });
+
+  const terminados = jobHistory.filter(j => j.status === 'SUCCESS' || j.status === 'FAILED');
+  const fallidos = terminados.filter(j => j.status === 'FAILED').length;
+  const errRate = terminados.length
+    ? Math.round((fallidos / terminados.length) * 100) : null;
+
+  const cells = TARGET_STATES.map(st =>
+    metricCell(st.toUpperCase(), porEstado[st]));
+  cells.push(metricCell('FINDINGS', total));
+  cells.push(metricCell('HIGH', high));
+  cells.push(metricCell('MEDIUM', medium));
+  cells.push(metricCell('SCANNED', conScan));
+  cells.push(metricCell('JOB_ERR', errRate == null ? '—' : errRate + '%'));
+
+  box.innerHTML = cells.join('');
+}
+
+function metricCell(label, value) {
+  return `<div class="metric">
+    <span class="metric-val">${esc(value)}</span>
+    <span class="metric-label">${esc(label)}</span>
+  </div>`;
 }
 
 function riskCell(t) {
@@ -82,7 +136,7 @@ function riskCell(t) {
 }
 
 function rowHtml(t) {
-  const st = t.status || 'queued';
+  const st = targetState(t);
   const badge = `<span class="badge st-${esc(st)}">${esc(st.toUpperCase())}</span>`;
   const risk = riskCell(t);
 
@@ -274,6 +328,7 @@ function updateJobHistoryStatus(id, status) {
   const j = jobHistory.find(x => x.id === id);
   if (j) j.status = status;
   renderJobHistory();
+  renderMetrics();
 }
 
 function renderJobHistory() {

@@ -28,7 +28,11 @@ _load_env()
 from flask import Flask, render_template
 from flask_login import login_required
 
+if str(REPO_DIR) not in sys.path:
+    sys.path.insert(0, str(REPO_DIR))
+
 from auth import SECRET_KEY, auth_bp, get_password, init_auth
+from lib import states
 from routes import files_bp, run_bp, stream_bp, targets_bp
 
 app = Flask(__name__,
@@ -64,6 +68,7 @@ def dashboard():
         "dashboard.html",
         target_files=target_files,
         sessions=sessions,
+        target_states=list(states.ALL),
     )
 
 

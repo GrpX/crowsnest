@@ -388,74 +388,72 @@ tr:hover td {
   font-family: var(--mono);
 }
 
-.badge.flash {
+/* Estados del ciclo de vida — ver lib/states.py */
+
+.badge.st-queued {
+  border: 1px solid #333;
+  color: var(--text-dim);
+}
+
+.badge.st-recon {
   border: 1px solid var(--cyber-cyan);
   color: var(--cyber-cyan);
   box-shadow: 0 0 6px rgba(0, 229, 255, 0.4);
 }
 
-.badge.diagnostico {
+.badge.st-enriched {
   border: 1px solid var(--hazard);
   color: var(--hazard);
+  box-shadow: 0 0 6px rgba(255, 176, 0, 0.35);
 }
 
-.badge.trabajo {
+.badge.st-reported {
   border: 1px solid var(--success);
   color: var(--success);
   box-shadow: 0 0 6px rgba(57, 255, 20, 0.4);
 }
 
-.badge.nuevo {
-  border: 1px solid #333;
-  color: var(--text-dim);
+.badge.st-skipped {
+  border: 1px solid #444;
+  color: #777;
+  text-decoration: line-through;
 }
 
-/* ── OUTREACH BADGE (select) ────────────────────────────── */
+/* ── METRICS BAR ────────────────────────────────────────── */
 
-.outreach-badge {
+.metrics-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  background: #1a1a1a;
+  border: 1px solid #1a1a1a;
+  margin-bottom: 10px;
+}
+
+.metric {
+  flex: 1 1 78px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 6px;
+  background: #0a0a0a;
+}
+
+.metric-val {
   font-family: var(--mono);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  padding: 3px 6px;
-  background: #0a0a0a;
-  border: 1px solid #333;
-  color: var(--text-dim);
-  cursor: pointer;
-  outline: none;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.outreach-badge:focus { border-color: var(--hazard); }
-
-.outreach-badge.ob-pendiente  { border-color: #444;              color: var(--text-dim); }
-.outreach-badge.ob-enviado    { border-color: var(--cyber-cyan); color: var(--cyber-cyan); box-shadow: 0 0 6px rgba(0, 229, 255, 0.3); }
-.outreach-badge.ob-respondido { border-color: var(--success);    color: var(--success);   box-shadow: 0 0 6px rgba(57, 255, 20, 0.3); }
-.outreach-badge.ob-descartado { border-color: #ff4444;           color: #ff4444; }
-
-.outreach-badge option {
-  background: #0a0a0a;
-  color: var(--text);
-}
-
-/* ── EMAIL CELL ─────────────────────────────────────────── */
-
-.email-cell {
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.email-link {
+  font-size: 16px;
   color: var(--cyber-cyan);
-  font-size: 11px;
-  text-decoration: none;
-  transition: text-shadow 0.2s;
+  line-height: 1;
 }
 
-.email-link:hover { text-shadow: 0 0 6px var(--cyber-cyan); }
+.metric-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
 
 /* ── RISK SCORE ─────────────────────────────────────────── */
 
@@ -501,22 +499,6 @@ input[type="checkbox"] {
 
 .action-links a:hover {
   text-shadow: 0 0 8px var(--cyber-cyan);
-}
-
-.action-links a.restaurar-link {
-  color: var(--hazard);
-}
-
-.action-links a.restaurar-link:hover {
-  text-shadow: 0 0 8px var(--hazard);
-}
-
-.action-links a.flash-btn {
-  color: var(--success);
-}
-
-.action-links a.flash-btn:hover {
-  text-shadow: 0 0 8px var(--success);
 }
 
 /* ── TERMINAL FOOTER ────────────────────────────────────── */

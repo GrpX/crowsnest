@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Enriquece db/targets.json con datos del flash JSON de cada target.
 
-Para cada target con estado="flash_listo", busca la sesion de scan mas
+Para cada target en estado recon o enriched, busca la sesion de scan mas
 reciente en reportes/<dominio_con_guiones>_<fecha>/, lee el flash_*.json y
 agrega un bloque "scan_data" al target. No toca los descartados.
 """
@@ -12,6 +12,10 @@ import sys
 from collections import Counter
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if REPO not in sys.path:
+    sys.path.insert(0, REPO)
+from lib.states import ENRICHED, RECON  # noqa: E402
+
 DB = os.path.join(REPO, "db", "targets.json")
 REPORTES = os.path.join(REPO, "reportes")
 
@@ -111,7 +115,7 @@ def main():
     for dominio, p in targets.items():
         if not isinstance(p, dict):
             continue
-        if p.get("status") not in ("recon", "enriched"):
+        if p.get("status") not in (RECON, ENRICHED):
             continue
         if solo and dominio not in solo:
             continue
@@ -136,7 +140,7 @@ def main():
         scan = extract_scan_data(flash)
         scan["session_folder"] = os.path.basename(folder)
         p["scan_data"] = scan
-        p["status"] = "enriched"
+        p["status"] = ENRICHED
         enriquecidos.append((dominio, scan["risk_score"], scan["risk_level"]))
 
     with open(DB, "w", encoding="utf-8") as fh:

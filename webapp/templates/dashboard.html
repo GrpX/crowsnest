@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 {% block body %}
+{# Fuente unica de estados: lib/states.py -> app.py -> aqui -> app.js #}
+<script>window.TARGET_STATES = {{ target_states|tojson }};</script>
 <div class="hud-container">
 
   <!-- ── HEADER ──────────────────────────────────────────── -->
@@ -115,14 +117,16 @@
       <div class="filter-bar">
         <input class="search-field" id="search" type="text" placeholder="QUERY_TARGET_DATABASE">
         <div class="tag-filters">
+          {# Los estados vienen de lib/states.py via app.py — no duplicar aqui. #}
           <button class="tag active" data-filter="all" onclick="setFilter(this, 'all')">ALL</button>
-          <button class="tag" data-filter="queued" onclick="setFilter(this, 'queued')">QUEUED</button>
-          <button class="tag" data-filter="recon" onclick="setFilter(this, 'recon')">RECON</button>
-          <button class="tag" data-filter="enriched" onclick="setFilter(this, 'enriched')">ENRICHED</button>
-          <button class="tag" data-filter="reported" onclick="setFilter(this, 'reported')">REPORTED</button>
+          {% for st in target_states %}
+          <button class="tag" data-filter="{{ st }}" onclick="setFilter(this, '{{ st }}')">{{ st|upper }}</button>
+          {% endfor %}
         </div>
         <span id="counter"></span>
       </div>
+
+      <div class="metrics-bar" id="metrics"></div>
 
       <div class="tbl-wrap">
         <table>

@@ -50,6 +50,11 @@ except Exception:          # noqa: BLE001
 MODULE_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG = MODULE_DIR / "config.json"
 
+# Estados del target: definicion canonica en lib/states.py (raiz del repo).
+if str(MODULE_DIR.parent) not in sys.path:
+    sys.path.insert(0, str(MODULE_DIR.parent))
+from lib.states import QUEUED, SKIPPED  # noqa: E402
+
 # ─── COLORES / LOG ──────────────────────────────────────────────────────────
 # Todo el log va a stderr; stdout queda libre para el JSON de salida.
 def _c(code: str) -> str:
@@ -1440,10 +1445,10 @@ def persist_emails_to_db(targets: list, db_path=None, *,
                 # proximo batch lo reintente. Se anota el fallo y NO se toca el
                 # outreach (el envio sigue vigente si ya estaba).
                 if razon in ("conexion_fallida", "timeout"):
-                    entry["status"] = "queued"
+                    entry["status"] = QUEUED
                     entry["skip_reason"] = razon
                 else:
-                    entry["status"] = "skipped"
+                    entry["status"] = SKIPPED
                     entry["skip_reason"] = razon
                     marcados_descarte.append((dominio, razon))
             continue

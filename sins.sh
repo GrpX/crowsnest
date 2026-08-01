@@ -104,6 +104,9 @@ import json, sys
 from pathlib import Path
 from datetime import datetime
 
+sys.path.insert(0, "${SCRIPT_DIR}")
+from lib.states import QUEUED, REPORTED
+
 db_path = Path("${DB_FILE}")
 db = json.loads(db_path.read_text()) if db_path.exists() else {"version": 1, "targets": {}}
 
@@ -113,7 +116,7 @@ d = db["targets"].setdefault("${DOMINIO}", {
     "detailed_report_pdf": None,
     "remediation_at": None, "remediation_pdf": None,
     "skip_reason": "",
-    "status": "queued"
+    "status": QUEUED
 })
 
 d["name"] = "${NOMBRE}"
@@ -122,13 +125,13 @@ now = datetime.now().isoformat(timespec="seconds")
 if "${TIPO}" == "report_pdf":
     d["report_at"] = now
     d["report_pdf"] = "${RUTA_PDF}"
-    d["status"] = "reported"
+    d["status"] = REPORTED
 elif "${TIPO}" == "detailed_report_pdf":
     d["detailed_report_pdf"] = "${RUTA_PDF}"
 elif "${TIPO}" == "remediation_pdf":
     d["remediation_at"] = now
     d["remediation_pdf"] = "${RUTA_PDF}"
-    d["status"] = "reported"
+    d["status"] = REPORTED
 
 db_path.parent.mkdir(parents=True, exist_ok=True)
 db_path.write_text(json.dumps(db, ensure_ascii=False, indent=2))
@@ -141,10 +144,13 @@ PYEOF
 # se generan aparte desde el JSON que deja este paso.
 _db_update_scan() {
     local DOMINIO="$1" NOMBRE="$2" REPORT_JSON="$3" SESSION_FOLDER="$4"
-    python3 - "${DB_FILE}" "${DOMINIO}" "${NOMBRE}" "${REPORT_JSON}" "${SESSION_FOLDER}" <<'PYEOF'
+    python3 - "${DB_FILE}" "${DOMINIO}" "${NOMBRE}" "${REPORT_JSON}" "${SESSION_FOLDER}" "${SCRIPT_DIR}" <<'PYEOF'
 import json, sys
 from pathlib import Path
 from datetime import datetime
+
+sys.path.insert(0, sys.argv[6])
+from lib.states import QUEUED, RECON
 
 db_path        = Path(sys.argv[1])
 dominio        = sys.argv[2]
@@ -160,7 +166,7 @@ d = db["targets"].setdefault(dominio, {
     "detailed_report_pdf": None,
     "remediation_at": None, "remediation_pdf": None,
     "skip_reason": "",
-    "status": "queued",
+    "status": QUEUED,
 })
 
 d["name"] = nombre
@@ -201,8 +207,8 @@ except Exception as e:
     d.setdefault("scan_data", {})["session_folder"] = session_folder
     print(f"[!] No se pudo extraer scan_data completo de {flash_json.name}: {e}")
 
-if d.get("status") in (None, "queued"):
-    d["status"] = "recon"
+if d.get("status") in (None, QUEUED):
+    d["status"] = RECON
 
 db_path.parent.mkdir(parents=True, exist_ok=True)
 db_path.write_text(json.dumps(db, ensure_ascii=False, indent=2))
@@ -548,11 +554,15 @@ cmd_report() {
         mapfile -t LISTA < <(python3 - "$LATEST_PRIORITY" <<PYEOF
 import json, sys
 from pathlib import Path
+
+sys.path.insert(0, "${SCRIPT_DIR}")
+from lib.states import is_pending
+
 excluidos = set()
 try:
     db = json.loads(Path("${DB_FILE}").read_text())
     for dom, info in db.get("targets", {}).items():
-        if info.get("status") not in (None, "queued"):
+        if not is_pending(info.get("status")):
             excluidos.add(dom)
 except Exception:
     pass

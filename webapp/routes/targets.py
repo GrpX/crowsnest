@@ -7,9 +7,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from flask import Blueprint, jsonify
 from flask_login import login_required
 
-bp = Blueprint("targets", __name__)
-
 REPO_DIR = Path(__file__).parent.parent.parent.resolve()
+if str(REPO_DIR) not in sys.path:
+    sys.path.insert(0, str(REPO_DIR))
+from lib import states  # noqa: E402
+
+bp = Blueprint("targets", __name__)
 DB_FILE = REPO_DIR / "db" / "targets.json"
 
 
@@ -29,7 +32,7 @@ def list_targets():
         result.append({
             "dominio": dominio,
             "name": info.get("name", ""),
-            "status": info.get("status", "queued"),
+            "status": states.normalize(info.get("status")),
             "report_pdf": info.get("report_pdf"),
             "report_at": info.get("report_at"),
             "detailed_report_pdf": info.get("detailed_report_pdf"),
