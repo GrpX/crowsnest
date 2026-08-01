@@ -1,0 +1,42 @@
+# =============================================================
+# SINS PORTFOLIO — .gitignore
+# Este repo es público: nunca versionar credenciales ni datos reales
+# =============================================================
+
+# API Keys
+.env
+*.env
+.env.*
+!.env.example
+
+# Datos reales de prospectos, objetivos y clientes — NUNCA en este repo
+db/
+targets/
+reportes/
+results/
+
+# Configuraciones con API keys incrustadas
+config/subfinder/provider-config.yaml
+config/amass/config.ini
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OpenClaw — caches locales
+openclaw/.crawl4ai_cache/
+openclaw/.crawl4ai/
+.crawl4ai/
+
+# Temporales y backups
+*.tmp
+*.log
+*.bak
+*.backup_*
+
+# Sistema operativo
+.DS_Store
+Thumbs.db

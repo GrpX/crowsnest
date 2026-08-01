@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "modulo": "openclaw_orchestrator",
+  "descripcion": "Orquestador de 3 agentes Ollama que enriquece prospectos PYME de S.I.N.S. a partir de un JSON de Google Places.",
+  "ollama": {
+    "host": "http://localhost:11434",
+    "request_timeout": 180,
+    "keep_alive": "10m",
+    "_nota": "El host se puede sobreescribir con la variable de entorno OLLAMA_HOST."
+  },
+  "crawl4ai": {
+    "enabled": true,
+    "page_timeout_ms": 30000,
+    "word_count_threshold": 15,
+    "exclude_external_links": true,
+    "max_chars": 6000,
+    "scrape_subpages": true,
+    "user_agent": "SINS-OpenClaw/1.0 (auditoria de superficie de ataque; +https://sinsspa.cl)"
+  },
+  "batch": {
+    "max_prospectos": 185,
+    "confianza_minima": 0.35,
+    "pausa_entre_prospectos_seg": 0.8
+  },
+  "prefiltro": {
+    "enabled": true,
+    "detectar_migracion": true,
+    "timeout_seg": 12,
+    "min_content_chars": 150,
+    "max_antiguedad_años": 3,
+    "ignorar_status_codes": [403, 406, 429],
+    "señales_muerto": [
+      "domain for sale", "dominio en venta", "this domain is parked",
+      "buy this domain", "under construction", "coming soon",
+      "pagina en construccion", "sitio en construccion",
+      "suspended", "account suspended"
+    ]
+  },
+  "agentes": {
+    "orquestador": {
+      "model": "qwen2.5:7b",
+      "rol": "Triage del negocio y definición del ángulo de abordaje comercial.",
+      "temperature": 0.15,
+      "num_predict": 400,
+      "formato": "json",
+      "system_prompt": "Eres el agente ORQUESTADOR de S.I.N.S. (SINS Is Not Static SpA), una startup chilena de ciberseguridad para PYMEs. Recibes los datos crudos de un negocio obtenidos de Google Places. Decide si es un prospecto PYME viable y define el angulo de abordaje. Responde SIEMPRE en JSON, sin texto adicional, con estas claves exactas: viable (booleano), sector (string corto, ej: 'estudio juridico'), cargo_objetivo (cargo de la persona que toma decisiones, ej: 'Socio principal', 'Gerente General', 'Administrador'), prioridad ('alta'|'media'|'baja'), angulo (una sola frase con el gancho de ciberseguridad mas relevante para ese rubro). Considera NO viables: grandes empresas, entidades publicas, bancos, franquicias internacionales y multinacionales. No inventes datos de contacto. Si los datos incluyen dominio_original y dominio_alternativo, menciona en el campo angulo que la empresa migró de dominio — es una señal de que están activos y en crecimiento, buen momento para contactar."
+    },
+    "descubridor": {
+      "model": "qwen2.5:7b",
+      "rol": "Extraccion de dominio, email de contacto y cargo objetivo desde el sitio web de la PYME.",
+      "temperature": 0.1,
+      "num_predict": 700,
+      "formato": "json",
+      "system_prompt": "Eres el agente DESCUBRIDOR de S.I.N.S. Recibes los datos de un negocio y el contenido textual de su sitio web (puede venir vacio). Tu trabajo es extraer informacion de contacto VERIFICABLE, nunca inventada. Responde SIEMPRE en JSON, sin texto adicional, con estas claves exactas: dominio (dominio raiz del sitio sin http ni www, '' si no hay), email (correo de contacto que aparezca literalmente en el texto, '' si no aparece), cargo_objetivo (cargo del decisor; usa el sugerido por el orquestador si el sitio no aporta uno mejor), nombre_contacto ('' si no aparece), resumen_empresa (1 o 2 frases sobre que hace la empresa), senales (lista de observaciones de superficie de ataque visibles en el texto, ej: 'formulario de contacto', 'usa Gmail como correo corporativo', 'menciona pasarela de pagos'). REGLA CRITICA: si un email no esta literalmente en el texto recibido, deja email en ''. No inventes correos ni dominios."
+    },
+    "redactor": {
+      "model": "llama3.1:8b",
+      "rol": "Redaccion del mensaje de contacto en frio en espanol de Chile.",
+      "temperature": 0.7,
+      "num_predict": 400,
+      "formato": "texto",
+      "system_prompt": "Eres un redactor B2B chileno experto en ciberseguridad."
+    }
+  }
+}

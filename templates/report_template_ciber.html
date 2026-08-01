@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600&display=swap');
+:root{
+  --black:#0A0A0A;--white:#F5F4F0;--off:#FAFAF8;
+  --red:#C8102E;--red-muted:#F2D0D5;
+  --g1:#1A1A1A;--g2:#2C2C2C;--g3:#5C5C5C;--g4:#9C9C9C;--g5:#D4D4D0;
+  --crit:#C8102E;--crit-bg:#FAE0E4;
+  --high:#D95F00;--high-bg:#FDE8D8;
+  --med:#B8860B;--med-bg:#FDF5DC;
+  --low:#2A6E3F;--low-bg:#D8F0E3;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:var(--white);color:var(--black);font-size:10pt;line-height:1.6}
+@page{size:A4;margin:0}
+
+.page{
+  width:210mm;height:297mm;
+  position:relative;
+  page-break-after:always;
+  page-break-inside:avoid;
+  overflow:hidden;
+  display:flex;flex-direction:column;
+}
+.page:last-child{page-break-after:avoid}
+
+.ph{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:6mm 16mm 5mm;border-bottom:1px solid var(--g5)}
+.ph-sins{font-family:'DM Mono',monospace;font-size:7pt;letter-spacing:.18em;color:var(--g4);text-transform:uppercase}
+.ph-client{font-family:'DM Mono',monospace;font-size:7pt;color:var(--g3)}
+.ph-class{font-family:'DM Mono',monospace;font-size:6.5pt;letter-spacing:.15em;color:var(--red);text-transform:uppercase}
+
+.pc{flex:1;padding:8mm 16mm;overflow:hidden}
+
+.pf{flex-shrink:0;display:flex;justify-content:space-between;align-items:center;padding:4mm 16mm;border-top:1px solid var(--g5)}
+.pf-txt{font-family:'DM Mono',monospace;font-size:6.5pt;color:var(--g4)}
+.dot{display:inline-block;width:5px;height:5px;background:var(--red);border-radius:50%;margin-right:5px}
+
+/* COVER */
+.cover{background:var(--black);color:var(--white)}
+.stripe{height:3px;background:var(--red);flex-shrink:0}
+.cover-top{flex-shrink:0;padding:12mm 16mm 0;display:flex;justify-content:space-between;align-items:flex-start}
+.cover-badge{font-family:'DM Mono',monospace;font-size:6.5pt;letter-spacing:.18em;color:var(--red);text-transform:uppercase;border:1px solid var(--red);padding:3px 8px}
+.cover-divider{height:1px;background:var(--g2);margin:9mm 16mm 0;flex-shrink:0}
+.cover-main{flex:1;padding:12mm 16mm 8mm;display:flex;flex-direction:column;justify-content:center}
+.cover-eyebrow{font-family:'DM Mono',monospace;font-size:7pt;letter-spacing:.22em;color:var(--red);text-transform:uppercase;margin-bottom:5mm}
+.cover-title{font-family:'Playfair Display',serif;font-size:38pt;font-weight:900;line-height:1.02;letter-spacing:-.02em;color:var(--white);margin-bottom:8mm}
+.cover-client{border-left:3px solid var(--red);padding-left:7mm;margin-bottom:9mm}
+.cover-client-name{font-size:14pt;font-weight:600;color:var(--white)}
+.cover-client-domain{font-family:'DM Mono',monospace;font-size:9pt;color:var(--g4);margin-top:2px}
+.cover-risk{display:inline-flex;align-items:center;gap:10px;padding:5mm 7mm;border:1px solid var(--g2);background:var(--g1)}
+.risk-num{font-family:'Playfair Display',serif;font-size:36pt;font-weight:900;line-height:1}
+.risk-num.crit{color:var(--crit)}.risk-num.high{color:var(--high)}
+.risk-num.med{color:var(--med)}.risk-num.low{color:var(--low)}.risk-num.none{color:var(--g4)}
+.risk-meta{display:flex;flex-direction:column;gap:2px}
+.risk-lbl{font-family:'DM Mono',monospace;font-size:6.5pt;letter-spacing:.18em;color:var(--g4);text-transform:uppercase}
+.risk-lvl{font-size:13pt;font-weight:600;color:var(--white)}
+.cover-footer{flex-shrink:0;padding:6mm 16mm;border-top:1px solid var(--g2);display:flex;justify-content:space-between}
+.cf-col{font-family:'DM Mono',monospace;font-size:7pt;color:var(--g4);line-height:1.8}
+.cf-col span{color:var(--g3)}
+
+/* SECTIONS */
+.sec-label{font-family:'DM Mono',monospace;font-size:7pt;letter-spacing:.22em;color:var(--red);text-transform:uppercase;margin-bottom:2mm;display:flex;align-items:center;gap:8px}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--red-muted)}
+.sec-title{font-family:'Playfair Display',serif;font-size:20pt;font-weight:700;letter-spacing:-.02em;color:var(--black);margin-bottom:4mm;line-height:1.1}
+p{color:var(--g2);margin-bottom:3mm;line-height:1.65}
+
+/* SUMMARY */
+.sum-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:3mm;margin:4mm 0}
+.sum-card{padding:4mm 5mm;border:1px solid var(--g5);background:var(--off)}
+.sum-n{font-family:'Playfair Display',serif;font-size:28pt;font-weight:900;line-height:1;margin-bottom:1mm}
+.sum-n.crit{color:var(--crit)}.sum-n.high{color:var(--high)}.sum-n.med{color:var(--med)}.sum-n.low{color:var(--low)}
+.sum-lbl{font-family:'DM Mono',monospace;font-size:7pt;letter-spacing:.13em;color:var(--g4);text-transform:uppercase}
+.disclaimer{background:var(--g1);color:#D4D4D0;padding:3mm 5mm;margin:3mm 0;border-left:3px solid var(--red);font-family:'DM Mono',monospace;font-size:6.5pt;line-height:1.6}
+
+/* EMAIL CARDS — 2x2 */
+.email-grid{display:grid;grid-template-columns:1fr 1fr;gap:2.5mm;margin:3mm 0}
+.email-card{padding:3.5mm 4mm;border:1px solid var(--g5);background:var(--white)}
+.email-card.ok        {border-top:3px solid var(--low)}
+.email-card.error     {border-top:3px solid var(--crit)}
+.email-card.advertencia{border-top:3px solid var(--med)}
+.ec-comp{font-family:'DM Mono',monospace;font-size:6.5pt;letter-spacing:.12em;text-transform:uppercase;margin-bottom:1.5mm;color:var(--g4)}
+.ec-plain{font-size:8pt;font-weight:600;color:var(--black);line-height:1.4;margin-bottom:1.5mm}
+.ec-risk{font-size:7pt;font-weight:600;margin-bottom:1.5mm}
+.ec-risk.crit{color:var(--crit)}.ec-risk.high{color:var(--high)}.ec-risk.med{color:var(--med)}.ec-risk.low{color:var(--low)}
+.ec-tech{font-family:'DM Mono',monospace;font-size:5.5pt;color:var(--g4);line-height:1.4;margin-top:1.5mm;padding-top:1.5mm;border-top:1px solid var(--g5)}
+.record{font-family:'DM Mono',monospace;font-size:5pt;color:var(--g3);background:#EEEDE9;padding:1px 3px;word-break:break-all;display:block;margin-top:1mm}
+
+/* FINDINGS TABLE */
+.ftable{width:100%;border-collapse:collapse;margin:3mm 0;font-size:8pt}
+.ftable th{font-family:'DM Mono',monospace;font-size:6.5pt;letter-spacing:.1em;text-transform:uppercase;color:var(--g4);padding:2.5mm 3mm;text-align:left;border-bottom:1px solid var(--g5);background:var(--off)}
+.ftable td{padding:3mm;border-bottom:1px solid var(--g5);vertical-align:top;color:var(--g2)}
+.ftable tr:nth-child(even) td{background:var(--off)}
+.sev{display:inline-block;padding:1px 6px;font-family:'DM Mono',monospace;font-size:6pt;font-weight:500;letter-spacing:.08em;text-transform:uppercase}
+.sev.critical{background:var(--crit-bg);color:var(--crit)}
+.sev.high{background:var(--high-bg);color:var(--high)}
+.sev.medium{background:var(--med-bg);color:var(--med)}
+.sev.low{background:var(--low-bg);color:var(--low)}
+.fn{font-weight:600;color:var(--black);margin-bottom:1px;font-size:8.5pt}
+.fh{font-family:'DM Mono',monospace;font-size:6.5pt;color:var(--g4)}
+
+/* FINDING CARDS — 2 por página, compactas */
+.fcard{border:1px solid var(--g5);margin-bottom:4mm;overflow:hidden}
+.fcard:last-child{margin-bottom:0}
+.fcard-hdr{display:flex;align-items:center;gap:8px;padding:3mm 4mm}
+.fcard-hdr.critical{background:var(--crit);color:white}
+.fcard-hdr.high    {background:var(--high);color:white}
+.fcard-hdr.medium  {background:var(--med); color:white}
+.fcard-hdr.low     {background:var(--low); color:white}
+.fcard-id{font-family:'DM Mono',monospace;font-size:7pt;opacity:.8;min-width:60px}
+.fcard-name{font-size:9.5pt;font-weight:700;flex:1}
+.fcard-sev{font-family:'DM Mono',monospace;font-size:6.5pt;font-weight:500;letter-spacing:.1em;text-transform:uppercase;opacity:.9}
+.fcard-meta{padding:3mm 4mm;display:grid;grid-template-columns:1fr 1fr;gap:2mm 6mm;border-bottom:1px solid var(--g5)}
+.dl{font-family:'DM Mono',monospace;font-size:6pt;letter-spacing:.1em;text-transform:uppercase;color:var(--g4);margin-bottom:0.5mm}
+.dv{font-size:8pt;color:var(--g2);line-height:1.4}
+.dv.mono{font-family:'DM Mono',monospace;font-size:6.5pt;background:#EEEDE9;padding:1.5mm 2.5mm;word-break:break-all;display:block}
+.fcard-desc{padding:3mm 4mm;border-bottom:1px solid var(--g5)}
+.fcard-rec{padding:3mm 4mm;border-bottom:1px solid var(--g5)}
+.rec-box{padding:2.5mm 4mm;font-size:8.5pt;font-weight:600;color:var(--black);line-height:1.55;border-left:4px solid var(--black);background:var(--off)}
+.fcard-refs{padding:2mm 4mm}
+
+/* LEGAL */
+.legal-highlight{background:var(--g1);color:#D4D4D0;padding:4mm 5mm;border-left:3px solid var(--red);font-size:7.5pt;line-height:1.65;margin-bottom:4mm}
+.legal-highlight strong{display:block;font-size:8.5pt;margin-bottom:2mm;color:white;font-family:'DM Sans',sans-serif}
+.legal-grid{display:grid;grid-template-columns:1fr 1fr;gap:3mm;margin-bottom:3mm}
+.legal-card{border:1px solid var(--g5);padding:3.5mm 4mm;background:var(--off)}
+.legal-card-title{font-size:7.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--black);margin-bottom:1.5mm}
+.legal-card-body{font-size:7pt;color:var(--g3);line-height:1.55}
+.legal-card-link{font-family:'DM Mono',monospace;font-size:6pt;color:var(--g4);display:block;margin-top:1.5mm}
+.legal-scope{border:1px solid var(--g5);padding:3.5mm 4mm;background:var(--off)}
+.legal-scope-title{font-size:7.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--black);margin-bottom:1.5mm}
+.legal-scope-body{font-size:7pt;color:var(--g3);line-height:1.55}
+
+/* CLOSING */
+.closing{background:var(--black);color:var(--white)}
+.closing-body{flex:1;padding:14mm 16mm;display:flex;flex-direction:column;justify-content:center}
+.closing-title{font-family:'Playfair Display',serif;font-size:28pt;font-weight:900;line-height:1.08;letter-spacing:-.02em;color:var(--white);margin-bottom:6mm}
+.closing-p{color:var(--g4);font-size:9pt;max-width:120mm;line-height:1.65;margin-bottom:8mm}
+.closing-cols{display:grid;grid-template-columns:1fr 1fr;gap:6mm;border-top:1px solid var(--g2);padding-top:6mm}
+.cc-label{font-family:'DM Mono',monospace;font-size:6.5pt;letter-spacing:.18em;color:var(--red);text-transform:uppercase;margin-bottom:2mm}
+.cc-val{font-size:9.5pt;color:var(--g4);line-height:1.7}
+
+.mt3{margin-top:3mm}
+.no-find{text-align:center;padding:8mm;color:var(--g4);font-family:'DM Mono',monospace;font-size:7.5pt;border:1px dashed var(--g5);letter-spacing:.1em}
+
+/* UPSELL CTA (solo flash) */
+.upsell-cta{margin-top:4mm;padding:4mm 5mm;background:var(--g1);border:2px solid var(--red);color:var(--white)}
+.upsell-cta-count{font-family:'Playfair Display',serif;font-size:13pt;font-weight:900;color:var(--red);margin-bottom:1.5mm}
+.upsell-cta-text{font-size:8pt;color:var(--g5);line-height:1.55}
+
+/* CONTINUITY RISK BADGE */
+.cr{display:inline-block;padding:1px 5px;font-family:'DM Mono',monospace;font-size:6pt;font-weight:500;letter-spacing:.06em;text-transform:uppercase}
+.cr-alto{background:var(--crit-bg);color:var(--crit)}
+.cr-medio{background:var(--med-bg);color:var(--med)}
+.cr-bajo{background:var(--low-bg);color:var(--low)}
+
+/* IMPACT SCENARIOS */
+.impact-card{border:1px solid var(--g5);margin-bottom:2.5mm;overflow:hidden}
+.impact-hdr{display:flex;align-items:center;justify-content:space-between;padding:2.5mm 4mm}
+.impact-hdr-crítico{background:var(--crit);color:white}
+.impact-hdr-alto{background:var(--high);color:white}
+.impact-hdr-medio{background:var(--med);color:white}
+.impact-title{font-size:8.5pt;font-weight:700}
+.impact-sev{font-family:'DM Mono',monospace;font-size:6pt;letter-spacing:.1em;text-transform:uppercase;opacity:.9}
+.impact-body{padding:3mm 4mm}
+.impact-desc{font-size:7.5pt;color:var(--g2);line-height:1.55;margin-bottom:1.5mm}
+.impact-vector{font-family:'DM Mono',monospace;font-size:5.5pt;color:var(--red);background:#FAF0F2;padding:1.5mm 3mm;margin-bottom:2mm;letter-spacing:.05em}
+.impact-cols{display:grid;grid-template-columns:1fr 1fr;gap:3mm;margin-bottom:1.5mm}
+.impact-sub{font-family:'DM Mono',monospace;font-size:6pt;letter-spacing:.1em;text-transform:uppercase;color:var(--g4);margin-bottom:0.8mm}
+.impact-txt{font-size:7pt;color:var(--g3);line-height:1.5}
+.impact-sector{font-size:6.5pt;color:var(--g4);font-style:italic;border-top:1px solid var(--g5);padding-top:1.5mm;margin-top:1.5mm}
+
+/* COST COMPARISON */
+.cost-compare{display:grid;grid-template-columns:1fr auto 1fr;gap:3mm;align-items:center;margin:3mm 0}
+.cost-card{border:1px solid var(--g5);padding:3mm 4mm;background:var(--off);text-align:center}
+.cost-card-rem{border-top:3px solid var(--low)}
+.cost-card-inc{border-top:3px solid var(--crit)}
+.cost-label{font-family:'DM Mono',monospace;font-size:6pt;letter-spacing:.12em;text-transform:uppercase;color:var(--g4);margin-bottom:1mm}
+.cost-val{font-family:'Playfair Display',serif;font-size:18pt;font-weight:900;line-height:1}
+.cost-val-rem{color:var(--low)}
+.cost-val-inc{color:var(--crit)}
+.cost-vs{font-family:'DM Mono',monospace;font-size:8pt;color:var(--g4);text-align:center;font-weight:600}
+
+/* LEGAL OBLIGATION CARDS (compact) */
+.legal-obligation{border:1px solid var(--g5);padding:2.5mm 4mm;margin-bottom:2mm;background:var(--off)}
+.lo-header{display:flex;align-items:baseline;gap:5px;margin-bottom:1.5mm}
+.lo-law{font-family:'DM Mono',monospace;font-size:6pt;letter-spacing:.1em;text-transform:uppercase;color:var(--red)}
+.lo-article{font-size:7.5pt;font-weight:700;color:var(--black)}
+.lo-body{font-size:7pt;color:var(--g3);line-height:1.5;margin-bottom:1mm}
+.lo-consequence{font-size:6.5pt;color:var(--crit);font-weight:600;line-height:1.4}
+
+/* REMEDIATION TABLE */
+.remediation-table{width:100%;border-collapse:collapse;margin:3mm 0;font-size:8pt}
+.remediation-table th{background:#0A0A0A;color:#F5F4F0;padding:2mm 3mm;text-align:left;font-size:7.5pt;text-transform:uppercase;letter-spacing:0.5pt}
+.remediation-table td{padding:2mm 3mm;border-bottom:0.3pt solid #ddd}
+.remediation-table .text-right{text-align:right}
+.remediation-table .total-row{background:#f5f4f0;border-top:1pt solid #C8102E}
+.remediation-table .total-row td{padding:2.5mm 3mm}
+.cost-sub{font-size:7pt;color:#666;margin-top:1mm}
+
+/* WARNING CARD */
+.legal-card-warning{border-left:3pt solid #C8102E;background:#fff8f8}
+.legal-card-warning .legal-card-title{color:#C8102E}
+</style>
+</head>
+<body>
+{% set TEMPLATE_NAME_ES = {
+  "Weak Cipher Suites Detection":  "Cifrados TLS débiles detectados",
+  "wordpress-readme-file":         "Archivo README de WordPress expuesto",
+  "http-missing-security-headers": "Cabeceras de seguridad HTTP ausentes",
+  "deprecated-tls":                "Versión TLS obsoleta habilitada",
+  "tls-version":                   "Versión TLS detectada",
+  "ssl-issuer":                    "Emisor del certificado SSL",
+  "ssl-dns-names":                 "Nombres DNS del certificado SSL",
+  "wildcard-tls":                  "Certificado TLS wildcard detectado",
+  "weak-hsts-detect":              "Política HSTS débil o ausente",
+  "mx-fingerprint":                "Servidor de correo identificado",
+  "nameserver-fingerprint":        "Servidor DNS identificado",
+  "spf-record-detect":             "Registro SPF detectado",
+  "txt-fingerprint":               "Registro TXT identificado",
+  "caa-fingerprint":               "Registro CAA detectado",
+  "aaaa-fingerprint":              "Registro IPv6 (AAAA) detectado",
+  "dns-saas-service-detection":    "Servicio SaaS detectado via DNS",
+  "google-client-id":              "Client ID de Google expuesto",
+  "wordpress-detect":              "CMS WordPress detectado",
+  "tech-detect":                   "Tecnología web detectada"
+} %}
+
+<!-- PORTADA -->
+<div class="page cover">
+  <div class="stripe"></div>
+  <div class="cover-top">
+    <img src="{{ logo_b64 }}" style="height:48px;width:auto" alt="S.I.N.S.">
+    {% if report_type == 'diagnostico' %}
+    <div class="cover-badge">Diagnóstico Ejecutivo</div>
+    {% elif report_type == 'trabajo' %}
+    <div class="cover-badge">Informe Técnico</div>
+    {% else %}
+    <div class="cover-badge">Confidencial</div>
+    {% endif %}
+  </div>
+  <div class="cover-divider"></div>
+  <div class="cover-main">
+    {% if report_type == 'diagnostico' %}
+    <div class="cover-eyebrow">Diagnóstico Ley Marco de Ciberseguridad · {{ meta.generated_date_human }}</div>
+    <div class="cover-title">Diagnóstico de<br>Cumplimiento<br>Ley 21.663</div>
+    {% elif report_type == 'trabajo' %}
+    <div class="cover-eyebrow">Informe Técnico · {{ meta.generated_date_human }}</div>
+    <div class="cover-title">Informe Técnico<br>de Ciberseguridad</div>
+    {% else %}
+    <div class="cover-eyebrow">Ley Marco de Ciberseguridad · {{ meta.generated_date_human }}</div>
+    <div class="cover-title">Análisis de<br>Exposición en<br>Ciberseguridad</div>
+    {% endif %}
+    <div class="cover-client">
+      <div class="cover-client-name">{{ client.name }}</div>
+      <div class="cover-client-domain">{{ client.domain }}</div>
+    </div>
+    {% set s = executive_summary.risk_score %}
+    {% set lc = 'crit' if s >= 80 else 'high' if s >= 50 else 'med' if s >= 25 else 'low' if s > 0 else 'none' %}
+    <div class="cover-risk">
+      <div class="risk-num {{ lc }}">{{ s }}</div>
+      <div class="risk-meta">
+        <span class="risk-lbl">Puntaje de riesgo / 100</span>
+        <span class="risk-lvl">{{ executive_summary.risk_level }}</span>
+      </div>
+    </div>
+  </div>
+  <div class="cover-footer">
+    <div class="cf-col">Dominio analizado<br><span>{{ client.domain }}</span></div>
+    <div class="cf-col" style="text-align:center">Marco legal<br><span>Ley 21.663 · Ciberseguridad</span></div>
+    <div class="cf-col" style="text-align:right">Generado el<br><span>{{ meta.generated_date_human }}</span></div>
+  </div>
+</div>
+
+<!-- RESUMEN EJECUTIVO -->
+<div class="page interior">
+  <div class="ph">
+    <span class="ph-sins">S.I.N.S. — SINS Is Not Static SpA</span>
+    <span class="ph-client">{{ client.name }} · {{ client.domain }}</span>
+    <span class="ph-class">Confidencial</span>
+  </div>
+  <div class="pc">
+    <div class="sec-label">01 · Resumen Ejecutivo</div>
+    <div class="sec-title">Resumen Ejecutivo</div>
+    <p>Análisis de superficie de ataque del dominio <strong style="font-family:'DM Mono',monospace">{{ client.domain }}</strong> mediante reconocimiento pasivo (OSINT) y análisis no intrusivo de servicios públicamente accesibles. Como proveedor de operadores de servicios esenciales, la seguridad de esta superficie es parte de la cadena de suministro regulada por la Ley 21.663.</p>
+    <div class="sum-grid">
+      <div class="sum-card"><div class="sum-n crit">{{ executive_summary.findings_by_severity.critical }}</div><div class="sum-lbl">Críticos</div></div>
+      <div class="sum-card"><div class="sum-n high">{{ executive_summary.findings_by_severity.high }}</div><div class="sum-lbl">Altos</div></div>
+      <div class="sum-card"><div class="sum-n med">{{ executive_summary.findings_by_severity.medium }}</div><div class="sum-lbl">Medios</div></div>
+      <div class="sum-card"><div class="sum-n low">{{ executive_summary.findings_by_severity.low }}</div><div class="sum-lbl">Bajos</div></div>
+    </div>
+    <p>{{ executive_summary.key_recommendation }}</p>
+    {% if email_security.findings %}
+    <div class="sec-label mt3">Seguridad de correo electrónico</div>
+    <div class="email-grid">
+      {% for ef in email_security.findings %}
+      {% set rl = 'crit' if 'Crítico' in ef.risk else 'high' if 'Alto' in ef.risk else 'med' if 'Medio' in ef.risk else 'low' %}
+      <div class="email-card {{ ef.status }}">
+        <div class="ec-comp">{{ ef.component }}</div>
+        <div class="ec-plain">{{ ef.detail.split(':')[0] if ':' in ef.detail else ef.detail }}</div>
+        <div class="ec-risk {{ rl }}">⚠ {{ ef.risk }}</div>
+        {% if ef.record %}<div class="ec-tech"><code class="record">{{ ef.record[:65] }}{% if ef.record|length > 65 %}…{% endif %}</code></div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="disclaimer">{{ meta.disclaimer }}</div>
+  </div>
+  <div class="pf">
+    <span class="pf-txt"><span class="dot"></span>S.I.N.S. — Confidencial</span>
+    <span class="pf-txt">{{ client.domain }} · {{ meta.generated_date_human }}</span>
+    <span class="pf-txt">Página 2</span>
+  </div>
+</div>
+
+<!-- ANÁLISIS DE IMPACTO EN EL NEGOCIO (solo diagnóstico) -->
+{% if (report_type == 'diagnostico' or report_type == 'trabajo') and business_impact and business_impact.scenarios %}
+<div class="page interior">
+  <div class="ph">
+    <span class="ph-sins">S.I.N.S. — SINS Is Not Static SpA</span>
+    <span class="ph-client">{{ client.name }} · {{ client.domain }}</span>
+    <span class="ph-class">Confidencial</span>
+  </div>
+  <div class="pc">
+    <div class="sec-label">02 · Análisis de Impacto en el Negocio</div>
+    <div class="sec-title">Análisis de Impacto en el Negocio</div>
+    <p style="font-size:8pt;margin-bottom:3mm">Basado en los hallazgos técnicos identificados, los siguientes escenarios representan los riesgos concretos para <strong>{{ client.name }}</strong> —y para el operador de servicios esenciales al que abastece— en caso de no remediar las vulnerabilidades.</p>
+
+    {% for scenario in business_impact.scenarios %}
+    <div class="impact-card">
+      <div class="impact-hdr impact-hdr-{{ scenario.severity | lower }}">
+        <span class="impact-title">{{ scenario.title }}</span>
+        <span class="impact-sev">{{ scenario.severity }}</span>
+      </div>
+      <div class="impact-body">
+        <div class="impact-desc">{{ scenario.description }}</div>
+        <div class="impact-vector">{{ scenario.attack_vector }}</div>
+        <div class="impact-cols">
+          <div>
+            <div class="impact-sub">Impacto financiero y sancionatorio</div>
+            <div class="impact-txt">{{ scenario.financial_impact }}</div>
+          </div>
+          <div>
+            <div class="impact-sub">Impacto reputacional y comercial</div>
+            <div class="impact-txt">{{ scenario.reputational_impact }}</div>
+          </div>
+        </div>
+        {% if scenario.sector_note %}
+        <div class="impact-sector">{{ scenario.sector_note }}</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+
+    {% if business_impact.legal_obligations %}
+    <div class="sec-label mt3">Obligaciones bajo la Ley 21.663 — Ley Marco de Ciberseguridad</div>
+    {% for lo in business_impact.legal_obligations %}
+    <div class="legal-obligation">
+      <div class="lo-header">
+        <span class="lo-law">{{ lo.law }}</span>
+        <span class="lo-article">{{ lo.article }}</span>
+      </div>
+      <div class="lo-body">{{ lo.obligation }}</div>
+      <div class="lo-consequence">⚠ Consecuencia: {{ lo.consequence }}</div>
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% if report_type == 'trabajo' %}
+    {% set ns_ports = namespace(items=[]) %}
+    {% for f in findings %}
+      {% if 'abierto en' in (f.description | default('')) %}
+        {% set ns_ports.items = ns_ports.items + [f] %}
+      {% endif %}
+    {% endfor %}
+    {% if ns_ports.items %}
+    <div class="sec-label mt3">Puertos expuestos detectados (nmap)</div>
+    <table class="ftable">
+      <thead><tr>
+        <th style="width:55px">ID</th>
+        <th style="width:68px">Severidad</th>
+        <th>Hallazgo / Host</th>
+        <th>Categoría</th>
+        <th style="width:72px">Riesgo de continuidad</th>
+      </tr></thead>
+      <tbody>
+        {% for f in ns_ports.items %}
+        {% set cr = f.continuity_risk | default('Medio') %}
+        {% set cr_class = 'cr-alto' if cr == 'Alto' else 'cr-medio' if cr == 'Medio' else 'cr-bajo' %}
+        <tr>
+          <td style="font-family:'DM Mono',monospace;font-size:7pt;color:var(--g4)">{{ f.id }}</td>
+          <td><span class="sev {{ f.severity }}">{{ f.severity_label }}</span></td>
+          <td><div class="fn">{{ f.name }}</div><div class="fh">{{ f.matched_at }}</div></td>
+          <td style="font-size:7.5pt;color:var(--g3)">{{ f.category }}</td>
+          <td><span class="cr {{ cr_class }}">{{ cr }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% endif %}
+  </div>
+  <div class="pf">
+    <span class="pf-txt"><span class="dot"></span>S.I.N.S. — Confidencial</span>
+    <span class="pf-txt">{{ client.domain }} · {{ meta.generated_date_human }}</span>
+    <span class="pf-txt">Página 3</span>
+  </div>
+</div>
+{% endif %}
+
+<!-- PLAN DE REMEDIACIÓN — página dedicada (solo diagnóstico) -->
+{% if report_type != 'flash' and business_impact and business_impact.remediation_items %}
+<div class="page interior">
+  <div class="ph">
+    <span class="ph-sins">S.I.N.S. — SINS Is Not Static SpA</span>
+    <span class="ph-client">{{ client.name }} · {{ client.domain }}</span>
+    <span class="ph-class">Confidencial</span>
+  </div>
+  <div class="pc">
+    <div class="sec-label">03 · Plan de Remediación</div>
+    <div class="sec-title">Plan de Remediación con Costos Detallados</div>
+
+    <table class="remediation-table">
+      <thead>
+        <tr>
+          <th>Acción técnica</th>
+          <th class="text-right">Costo UF</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in business_impact.remediation_items %}
+        <tr>
+          <td>{{ item.label }}</td>
+          <td class="text-right">UF {{ "%.1f"|format(item.cost_uf) }}</td>
+        </tr>
+        {% endfor %}
+        <tr class="total-row">
+          <td><strong>Total inversión en remediación</strong></td>
+          <td class="text-right"><strong>UF {{ "%.1f"|format(business_impact.remediation_total_uf) }}</strong></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="cost-compare">
+      <div class="cost-card cost-card-rem">
+        <div class="cost-label">Inversión en remediación</div>
+        <div class="cost-val cost-val-rem">UF {{ "%.1f"|format(business_impact.remediation_total_uf) }}</div>
+        <div class="cost-sub">Una sola vez, costo técnico documentado</div>
+      </div>
+      <div class="cost-vs">vs</div>
+      <div class="cost-card cost-card-inc">
+        <div class="cost-label">Exposición ante un incidente</div>
+        <div class="cost-val cost-val-inc">UF {{ business_impact.incident_cost_min_uf }}–{{ business_impact.incident_cost_max_uf }}</div>
+        <div class="cost-sub">+ pérdida del contrato con su cliente OIV</div>
+      </div>
+    </div>
+    <p style="font-size:7pt;color:var(--g3);margin-top:3mm">Su empresa no es un Operador de Importancia Vital, por lo que las multas del Art. 40 de la Ley 21.663 —de hasta {{ business_impact.multa_oiv }} por infracción gravísima— recaen sobre su cliente OIV, no sobre usted. Pero un incidente originado en su infraestructura expone a ese cliente a esa sanción ante la ANCI, y por eso ningún OIV mantiene en su cadena a un proveedor no conforme: para su empresa, la consecuencia directa es la pérdida del contrato. La remediación se ejecuta una sola vez; el riesgo de exclusión de la cadena es recurrente mientras la vulnerabilidad persista.</p>
+  </div>
+  <div class="pf">
+    <span class="pf-txt"><span class="dot"></span>S.I.N.S. — Confidencial</span>
+    <span class="pf-txt">{{ client.domain }} · {{ meta.generated_date_human }}</span>
+    <span class="pf-txt">Página 4</span>
+  </div>
+</div>
+{% endif %}
+
+<!-- TABLA DE HALLAZGOS -->
+{% set detailed = [] %}
+{% for f in findings %}{% if f.severity in ['critical','high','medium'] %}{% set _ = detailed.append(f) %}{% endif %}{% endfor %}
+{% set findings_page = 5 if ((report_type == 'diagnostico' or report_type == 'trabajo') and business_impact and business_impact.scenarios) else 3 %}
+{% set findings_section = '04' if ((report_type == 'diagnostico' or report_type == 'trabajo') and business_impact and business_impact.scenarios) else '02' %}
+{# Flash: excluir hallazgos info (ruido); Diagnóstico: top 30 para evitar desborde de página #}
+{% if report_type == 'flash' %}
+  {% set table_findings = findings | rejectattr('severity', 'eq', 'info') | list %}
+{% else %}
+  {% set table_findings = findings[:30] %}
+{% endif %}
+{% set table_total = findings | length %}
+
+<div class="page interior">
+  <div class="ph">
+    <span class="ph-sins">S.I.N.S. — SINS Is Not Static SpA</span>
+    <span class="ph-client">{{ client.name }} · {{ client.domain }}</span>
+    <span class="ph-class">Confidencial</span>
+  </div>
+  <div class="pc">
+    <div class="sec-label">{{ findings_section }} · Hallazgos</div>
+    <div class="sec-title">Tabla de Hallazgos</div>
+    {% if table_findings %}
+    {% if table_findings|length < table_total %}
+    {% if report_type == 'flash' %}
+    {% set crit_count = table_findings | selectattr('severity', 'eq', 'critical') | list | length %}
+    {% set high_count = table_findings | selectattr('severity', 'eq', 'high') | list | length %}
+    {% set med_count = table_findings | selectattr('severity', 'eq', 'medium') | list | length %}
+    <p style="font-size:8pt;font-weight:600;color:var(--black);margin-bottom:2mm">
+      {{ table_findings|length }} hallazgos identificados
+      {% if crit_count %}({{ crit_count }} crítico{{ 's' if crit_count > 1 }}){% endif %}
+      {% if high_count %}({{ high_count }} alto{{ 's' if high_count > 1 }}){% endif %}
+      {% if med_count %}({{ med_count }} medio{{ 's' if med_count > 1 }}){% endif %}
+    </p>
+    {% else %}
+    <p style="font-size:7pt;color:var(--g4);margin-bottom:2mm">Se muestran {{ table_findings|length }} de {{ table_total }} hallazgos (ordenados por severidad).</p>
+    {% endif %}
+    {% endif %}
+    <table class="ftable">
+      <thead><tr>
+        <th style="width:55px">ID</th>
+        <th style="width:68px">Severidad</th>
+        <th>Hallazgo</th>
+        <th>Categoría</th>
+        <th style="width:55px">CVSS</th>
+        {% if report_type != 'flash' %}<th style="width:72px">Riesgo de continuidad</th>{% endif %}
+      </tr></thead>
+      <tbody>
+        {% for f in table_findings %}
+        {% set cr = f.continuity_risk | default('Medio') %}
+        {% set cr_class = 'cr-alto' if cr == 'Alto' else 'cr-medio' if cr == 'Medio' else 'cr-bajo' %}
+        <tr>
+          <td style="font-family:'DM Mono',monospace;font-size:7pt;color:var(--g4)">{{ f.id }}</td>
+          <td><span class="sev {{ f.severity }}">{{ f.severity_label }}</span></td>
+          <td><div class="fn">{{ TEMPLATE_NAME_ES[f.name] if f.name in TEMPLATE_NAME_ES else f.name }}</div><div class="fh">{{ f.matched_at }}</div></td>
+          <td style="font-size:7.5pt;color:var(--g3)">{{ f.category }}</td>
+          <td style="font-family:'DM Mono',monospace;font-size:7.5pt;color:var(--g3)">{{ f.cvss_score if f.cvss_score else f.cvss_range }}</td>
+          {% if report_type != 'flash' %}<td><span class="cr {{ cr_class }}">{{ cr }}</span></td>{% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if report_type == 'flash' and table_total > table_findings|length %}
+    {% set shown_ids = table_findings | map(attribute='id') | list %}
+    {% set hidden = findings | rejectattr('id', 'in', shown_ids) | list %}
+    {% if hidden %}
+    <div class="upsell-cta">
+      <div class="upsell-cta-count">+ {{ hidden|length }} hallazgos adicionales detectados:</div>
+      <div class="upsell-cta-text" style="font-size:7.5pt;color:var(--g3);margin-top:1mm">
+        {% set cats = {} %}
+        {% for f in hidden %}
+          {% set cat = f.category %}
+          {% if cat in cats %}
+            {% set _ = cats.update({cat: cats[cat] + 1}) %}
+          {% else %}
+            {% set _ = cats.update({cat: 1}) %}
+          {% endif %}
+        {% endfor %}
+        {% for cat, count in cats.items() %}
+        {{ count }} de {{ cat }}{% if not loop.last %} · {% endif %}
+        {% endfor %}
+      </div>
+      <div class="upsell-cta-text" style="margin-top:2mm">
+        Solicita el Diagnóstico de Cumplimiento Ley 21.663 para ver el análisis completo
+        de superficie, los escenarios de impacto en la cadena de suministro y el plan de
+        remediación priorizado con costos en UF.
+      </div>
+    </div>
+    {% endif %}
+    {% endif %}
+    {% else %}
+    <div class="no-find">No se identificaron vulnerabilidades en el escaneo de superficie.</div>
+    {% endif %}
+  </div>
+  <div class="pf">
+    <span class="pf-txt"><span class="dot"></span>S.I.N.S. — Confidencial</span>
+    <span class="pf-txt">{{ client.domain }} · {{ meta.generated_date_human }}</span>
+    <span class="pf-txt">Página {{ findings_page }}</span>
+  </div>
+</div>
+
+<!-- DETALLE: 2 hallazgos por página (solo diagnóstico) -->
+{% set detail_section = '05' if ((report_type == 'diagnostico' or report_type == 'trabajo') and business_impact and business_impact.scenarios) else '03' %}
+{% set ns = namespace(page_findings=[], page_num=findings_page + 1) %}
+{% if report_type != 'flash' and detailed %}
+{% for f in detailed %}
+  {% set _ = ns.page_findings.append(f) %}
+  {% if ns.page_findings|length == 2 or loop.last %}
+<div class="page interior">
+  <div class="ph">
+    <span class="ph-sins">S.I.N.S. — SINS Is Not Static SpA</span>
+    <span class="ph-client">{{ client.name }} · {{ client.domain }}</span>
+    <span class="ph-class">Confidencial</span>
+  </div>
+  <div class="pc">
+    {% if loop.index <= 2 %}
+    <div class="sec-label">{{ detail_section }} · Detalle de Hallazgos</div>
+    <div class="sec-title" style="margin-bottom:3mm">Detalle de Hallazgos</div>
+    {% endif %}
+    {% for pf in ns.page_findings %}
+    <div class="fcard">
+      <div class="fcard-hdr {{ pf.severity }}">
+        <span class="fcard-id">{{ pf.id }}</span>
+        <span class="fcard-name">{{ TEMPLATE_NAME_ES[pf.name] if pf.name in TEMPLATE_NAME_ES else pf.name }}</span>
+        <span class="fcard-sev">{{ pf.severity_label }}</span>
+      </div>
+      <div class="fcard-meta">
+        <div><div class="dl">Host afectado</div><div class="dv mono">{{ pf.matched_at }}</div></div>
+        <div><div class="dl">Categoría</div><div class="dv">{{ pf.category }}</div></div>
+        {% if pf.cve %}<div><div class="dl">CVE</div><div class="dv mono">{{ pf.cve }}</div></div>{% endif %}
+        <div><div class="dl">CVSS</div><div class="dv">{{ pf.cvss_score if pf.cvss_score else pf.cvss_range }}</div></div>
+      </div>
+      <div class="fcard-desc">
+        <div class="dl">¿Qué significa este hallazgo?</div>
+        <div class="dv" style="margin-top:1mm;font-size:8pt">{{ pf.description }}</div>
+      </div>
+      <div class="fcard-rec">
+        <div class="dl">Recomendación</div>
+        <div class="rec-box" style="margin-top:1mm">{{ pf.recommendation }}</div>
+      </div>
+      {% if pf.references %}
+      <div class="fcard-refs">
+        <div class="dl">Referencias</div>
+        {% for r in pf.references[:2] %}
+        <div style="font-family:'DM Mono',monospace;font-size:6pt;color:var(--g4);margin-top:1mm">{{ r }}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  <div class="pf">
+    <span class="pf-txt"><span class="dot"></span>S.I.N.S. — Confidencial</span>
+    <span class="pf-txt">{{ client.domain }} · {{ meta.generated_date_human }}</span>
+    <span class="pf-txt">Página {{ ns.page_num }}</span>
+  </div>
+</div>
+    {% set ns.page_findings = [] %}
+    {% set ns.page_num = ns.page_num + 1 %}
+  {% endif %}
+{% endfor %}
+{% endif %}
+
+<!-- MARCO LEGAL -->
+{% set legal_section = '03' if report_type == 'flash' else ('06' if ((report_type == 'diagnostico' or report_type == 'trabajo') and business_impact and business_impact.scenarios) else '04') %}
+<div class="page interior">
+  <div class="ph">
+    <span class="ph-sins">S.I.N.S. — SINS Is Not Static SpA</span>
+    <span class="ph-client">{{ client.name }} · {{ client.domain }}</span>
+    <span class="ph-class">Confidencial</span>
+  </div>
+  <div class="pc">
+    <div class="sec-label">{{ legal_section }} · Marco Legal</div>
+    <div class="sec-title">Marco Legal Aplicable</div>
+    <div class="legal-highlight">
+      <strong>Ley 21.663 — Ley Marco de Ciberseguridad</strong>
+      {{ appendix.ley_marco_ciber_relevance }}
+    </div>
+    <div class="legal-grid">
+      <div class="legal-card">
+        <div class="legal-card-title">OWASP Top 10 (2021)</div>
+        <div class="legal-card-body">Estándar internacional para vulnerabilidades en aplicaciones web. Todos los hallazgos están clasificados según esta metodología, reconocida por organismos reguladores y auditores a nivel global.
+        <span class="legal-card-link">owasp.org/www-project-top-ten/</span></div>
+      </div>
+      <div class="legal-card">
+        <div class="legal-card-title">NIST CSF · ISO/IEC 27001</div>
+        <div class="legal-card-body">Marcos metodológicos internacionales aplicables como referencia técnica para estructurar el Sistema de Gestión de Seguridad de la Información y demostrar el cumplimiento de los deberes de ciberseguridad ante la ANCI (Art. 7° y 8°, Ley 21.663). Metodología: Identificar · Proteger · Detectar · Responder · Recuperar.
+        <span class="legal-card-link">nist.gov/cyberframework</span></div>
+      </div>
+    </div>
+    <div class="legal-card legal-card-warning">
+      <div class="legal-card-title">⚠ Riesgo de exclusión de la cadena de suministro</div>
+      <div class="legal-card-body">
+      Su empresa no es un Operador de Importancia Vital (OIV), pero forma parte de la
+      cadena de proveedores de uno. La Ley 21.663 exige que los OIV acrediten ante la
+      ANCI que <strong>toda su cadena de suministro</strong> cumple con estándares de
+      ciberseguridad (<strong>Art. 8°</strong>). Esa obligación recae sobre su cliente
+      OIV y la ley lo fuerza a trasladársela: aunque su empresa no esté regulada
+      directamente, su cliente está legalmente obligado a exigirle cumplimiento.
+      <br><br>
+      El incentivo de su cliente es concreto y financiero. Las infracciones graves a la
+      Ley 21.663 acarrean multas de la ANCI de hasta {{ business_impact.multa_oiv }}
+      <strong>para el OIV</strong>. Ante esa exposición, ningún operador esencial mantendrá
+      en su cadena a un proveedor que no pueda acreditar su seguridad cuando la ANCI lo
+      requiera.
+      <br><br>
+      Para su empresa, no poder acreditar su ciberseguridad implica:
+      <ul style="margin: 2mm 0 0 4mm; padding: 0;">
+        <li>Pérdida del contrato con su cliente OIV, que tiene un incentivo legal y financiero directo para sustituirlo por un proveedor conforme antes de una auditoría de la ANCI</li>
+        <li>Exclusión del registro de proveedores y de futuras licitaciones de operadores regulados</li>
+        <li>Reprobación de las auditorías de ciberseguridad que su cliente está obligado a exigir a toda su cadena de suministro</li>
+        <li>Quedar señalado como el eslabón débil —el vector de entrada— de un incidente que interrumpa un servicio esencial</li>
+      </ul>
+      <br>
+      Acreditar su ciberseguridad deja de ser opcional: es la condición que su cliente OIV
+      debe cumplir ante la ANCI y, por lo tanto, la condición para conservar el contrato.
+      </div>
+    </div>
+    <div class="legal-scope">
+      <div class="legal-scope-title">Alcance y limitaciones</div>
+      <div class="legal-scope-body">Análisis realizado exclusivamente mediante técnicas OSINT y reconocimiento pasivo de superficie, sin acceso a sistemas internos, bases de datos ni código fuente. Los hallazgos reflejan el estado de la infraestructura pública en la fecha de análisis. Este informe no constituye asesoría legal: la calificación definitiva de una infracción corresponde a la ANCI.</div>
+    </div>
+  </div>
+  <div class="pf">
+    <span class="pf-txt"><span class="dot"></span>S.I.N.S. — Confidencial</span>
+    <span class="pf-txt">{{ client.domain }} · {{ meta.generated_date_human }}</span>
+    <span class="pf-txt">Página {{ ns.page_num }}</span>
+  </div>
+</div>
+
+<!-- CONTRAPORTADA -->
+<div class="page closing">
+  <div class="stripe"></div>
+  <div class="closing-body">
+    <img src="{{ logo_b64 }}" style="height:44px;width:auto;opacity:.85" alt="S.I.N.S.">
+    <div class="closing-title">La seguridad<br>no es un estado.<br>Es un proceso.</div>
+    <p class="closing-p">Este informe es el primer paso. S.I.N.S. ofrece acompañamiento continuo para implementar las recomendaciones, acreditar su ciberseguridad ante su cliente OIV y aprobar las auditorías que la Ley 21.663 — Ley Marco de Ciberseguridad — obliga a los Operadores de Importancia Vital a exigir a toda su cadena de proveedores.</p>
+    <div class="closing-cols">
+      <div>
+        <div class="cc-label">Próximos pasos</div>
+        <div class="cc-val">Revisión de hallazgos críticos<br>Plan de remediación priorizado<br>Monitoreo continuo de superficie</div>
+      </div>
+      <div>
+        <div class="cc-label">Contacto</div>
+        <div class="cc-val">sins.cl<br>contacto@sins.cl<br>Santiago, Chile</div>
+      </div>
+    </div>
+  </div>
+  <div class="cover-footer">
+    <div class="cf-col">S.I.N.S. SpA<br><span>sins.cl</span></div>
+    <div class="cf-col" style="text-align:right">© S.I.N.S. SpA<br><span>Todos los derechos reservados</span></div>
+  </div>
+</div>
+
+</body>
+</html>

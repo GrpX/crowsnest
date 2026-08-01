@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="hud-container">
+
+  <!-- ── HEADER ──────────────────────────────────────────── -->
+  <header class="ops-header">
+    <div class="logo-zone">
+      <span class="glitch" data-text="S.I.N.S.">S.I.N.S.</span>
+      <span class="sub-tag">SYSTEM_INTEGRITY_NETWORK_SCANNER</span>
+    </div>
+    <div class="session-info">
+      <span class="location">LOC: VIÑA_DEL_MAR_CHILE SYSTEM_ACTIVE</span>
+      <a href="{{ url_for('auth.logout') }}" class="exit-link">[ DISCONNECT ]</a>
+    </div>
+  </header>
+
+  <div class="main-ops">
+
+    <!-- ── SIDEBAR ─────────────────────────────────────────── -->
+    <aside class="arsenal-sidebar">
+
+      <!-- [01] CAPTACIÓN -->
+      <div class="tool-group">
+        <h3>[01] CAPTACIÓN</h3>
+
+        <div class="cmd-item" data-form="form-enriquecer" onclick="toggleCmd('form-enriquecer')">
+          &gt; ENRIQUECER PROSPECTOS
+        </div>
+        <div class="cmd-form" id="form-enriquecer">
+          <button class="cmd-execute" onclick="runCommand('batch', {}, this)">
+            EJECUTAR ENRIQUECIMIENTO
+          </button>
+        </div>
+
+      </div>
+
+      <!-- [02] INFORMES -->
+      <div class="tool-group">
+        <h3>[02] INFORMES</h3>
+
+        <div class="cmd-item" data-form="form-flash" onclick="toggleCmd('form-flash')">
+          &gt; FLASH
+        </div>
+        <div class="cmd-form" id="form-flash">
+          <input class="cmd-input" id="flash-dominio" type="text" placeholder="dominio.cl">
+          <input class="cmd-input" id="flash-cliente" type="text" placeholder="Nombre cliente">
+          <label class="cmd-check">
+            <input type="checkbox" id="flash-ciber"> marco --ciber (Ley 21.663)
+          </label>
+          <button class="cmd-execute" onclick="runFlash(this)">
+            EJECUTAR FLASH
+          </button>
+        </div>
+
+        <div class="cmd-item" data-form="form-diagnostico" onclick="toggleCmd('form-diagnostico')">
+          &gt; DIAGNÓSTICO
+        </div>
+        <div class="cmd-form" id="form-diagnostico">
+          <select class="cmd-input" id="sel-sesiones">
+            <option value="">— cargando sesiones... —</option>
+          </select>
+          <button class="cmd-execute" onclick="runDiagnostico(this)">
+            EJECUTAR DIAGNÓSTICO
+          </button>
+        </div>
+
+        <div class="cmd-item" data-form="form-trabajo" onclick="toggleCmd('form-trabajo')">
+          &gt; TRABAJO
+        </div>
+        <div class="cmd-form" id="form-trabajo">
+          <input class="cmd-input" id="trabajo-dominio" type="text" placeholder="cliente.cl">
+          <input class="cmd-input" id="trabajo-cliente" type="text" placeholder="Empresa S.A.">
+          <input class="cmd-input" id="trabajo-auth" type="text" placeholder="AUTH-2026-001">
+          <button class="cmd-execute" onclick="runTrabajo(this)">
+            EJECUTAR TRABAJO
+          </button>
+        </div>
+      </div>
+
+      <!-- [03] OPERACIONES -->
+      <div class="tool-group">
+        <h3>[03] OPERACIONES</h3>
+
+        <div class="cmd-item" data-form="form-batch" onclick="toggleCmd('form-batch')">
+          &gt; BATCH PROCESS
+        </div>
+        <div class="cmd-form" id="form-batch">
+          <select class="cmd-input" id="sel-targets">
+            <option value="">— cargando archivos... —</option>
+          </select>
+          <label class="cmd-label">WORKERS: <span id="workers-val">3</span></label>
+          <input class="cmd-input cmd-range" type="range" id="batch-workers"
+            min="1" max="5" value="3"
+            oninput="document.getElementById('workers-val').textContent = this.value">
+          <button class="cmd-execute" onclick="runBatch(this)">
+            EJECUTAR BATCH
+          </button>
+        </div>
+
+      </div>
+
+      <!-- RECENT JOBS -->
+      <div class="tool-group">
+        <h3>RECENT_JOBS</h3>
+        <ul class="job-list" id="job-list">
+          <li style="color:var(--text-dim)">Sin jobs activos</li>
+        </ul>
+      </div>
+
+    </aside>
+
+    <!-- ── RADAR DISPLAY ──────────────────────────────────── -->
+    <section class="radar-display">
+
+      <div class="filter-bar">
+        <input class="search-field" id="search" type="text" placeholder="QUERY_TARGET_DATABASE">
+        <div class="tag-filters">
+          <button class="tag active" data-filter="all" onclick="setFilter(this, 'all')">ALL</button>
+          <button class="tag" data-filter="pendiente" onclick="setFilter(this, 'pendiente')">PENDIENTE</button>
+          <button class="tag" data-filter="enviado" onclick="setFilter(this, 'enviado')">ENVIADO</button>
+          <button class="tag" data-filter="respondido" onclick="setFilter(this, 'respondido')">RESPONDIDO</button>
+          <button class="tag" data-filter="descartado" onclick="setFilter(this, 'descartado')">DESCARTADO</button>
+        </div>
+        <span id="counter"></span>
+      </div>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>TARGET_DOMAIN</th>
+              <th>IDENTIFIER</th>
+              <th>EMAIL</th>
+              <th>STATUS</th>
+              <th>OUTREACH</th>
+              <th>RISK_SCORE</th>
+              <th>DATA_ASSETS</th>
+            </tr>
+          </thead>
+          <tbody id="prospectos-body">
+            <tr>
+              <td colspan="7" style="text-align:center;color:var(--text-dim);padding:24px">
+                INITIALIZING...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </section>
+  </div>
+
+  <!-- ── TERMINAL FOOTER ───────────────────────────────────── -->
+  <footer class="terminal-output">
+    <div class="term-header">CONSOLA_DE_SALIDA :: SINS_IS_NOT_STATIC_v1.0</div>
+    <div class="term-body" id="output-content">
+      <p>&gt; initializing ciber-workstation...</p>
+    </div>
+  </footer>
+
+</div>
+{% endblock %}

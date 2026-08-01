@@ -1,0 +1,120 @@
+{
+  "_comentario": "Datos 100% ficticios. Ilustra el esquema de db/prospectos.json; ningún dominio, empresa, persona ni correo de este archivo corresponde a una entidad real.",
+  "version": 1,
+  "prospectos": {
+    "estudio-ejemplo.cl": {
+      "nombre": "Estudio Jurídico Ejemplo SpA",
+      "sector": "estudio juridico",
+      "estado": "contactado",
+      "score_captacion": 62,
+      "email_contacto": "contacto@estudio-ejemplo.cl",
+      "emails_encontrados": [
+        "contacto@estudio-ejemplo.cl",
+        "secretaria@estudio-ejemplo.cl"
+      ],
+      "email_fecha": "2026-01-15",
+      "email_mx_valido": true,
+      "email_score": 85,
+      "flash_fecha": "2026-01-14",
+      "flash_pdf": "reportes/estudio-ejemplo.cl/SINS_Flash_estudio-ejemplo_20260114.pdf",
+      "flash_ciber_pdf": null,
+      "diagnostico_pdf": null,
+      "diagnostico_ciber_pdf": null,
+      "trabajo_fecha": null,
+      "trabajo_pdf": null,
+      "pdf_desincronizado": false,
+      "prefiltro_fallo": "",
+      "razon_descarte": "",
+      "scan_data": {
+        "risk_score": 58,
+        "risk_level": "medio",
+        "total_findings": 11,
+        "high_findings": 2,
+        "medium_findings": 4,
+        "email_security_status": "SPF presente, DMARC ausente",
+        "key_recommendation": "Publicar registro DMARC en modo p=none y revisar cabeceras de seguridad HTTP.",
+        "session_folder": "reportes/estudio-ejemplo.cl/20260114_101500",
+        "top_findings": [
+          "Ausencia de registro DMARC",
+          "Cabecera Strict-Transport-Security no configurada",
+          "Panel de administración expuesto en /wp-admin"
+        ]
+      },
+      "outreach": {
+        "estado": "enviado",
+        "fecha_envio": "2026-01-15T09:30:00",
+        "fecha_respuesta": null,
+        "brevo_message_id": "<000000000000.0000000000@smtp-relay.example.net>",
+        "notas": null
+      }
+    },
+    "clinica-ficticia.cl": {
+      "nombre": "Clínica Dental Ficticia Ltda.",
+      "sector": "salud",
+      "estado": "respondido",
+      "score_captacion": 74,
+      "email_contacto": "hola@clinica-ficticia.cl",
+      "emails_encontrados": [
+        "hola@clinica-ficticia.cl"
+      ],
+      "email_fecha": "2026-02-02",
+      "email_mx_valido": true,
+      "email_score": 90,
+      "flash_fecha": "2026-02-01",
+      "flash_pdf": "reportes/clinica-ficticia.cl/SINS_Flash_clinica-ficticia_20260201.pdf",
+      "flash_ciber_pdf": null,
+      "diagnostico_pdf": null,
+      "diagnostico_ciber_pdf": null,
+      "trabajo_fecha": null,
+      "trabajo_pdf": null,
+      "pdf_desincronizado": false,
+      "prefiltro_fallo": "",
+      "razon_descarte": "",
+      "scan_data": {
+        "risk_score": 71,
+        "risk_level": "alto",
+        "total_findings": 17,
+        "high_findings": 4,
+        "medium_findings": 6,
+        "email_security_status": "Sin SPF ni DMARC",
+        "key_recommendation": "Configurar SPF y DMARC antes de cualquier campaña de correo; actualizar CMS a versión soportada.",
+        "session_folder": "reportes/clinica-ficticia.cl/20260201_143000",
+        "top_findings": [
+          "CMS con versión desactualizada y CVE conocido",
+          "Formulario de contacto sin protección anti-bot",
+          "Certificado TLS próximo a expirar"
+        ]
+      },
+      "outreach": {
+        "estado": "respondido",
+        "fecha_envio": "2026-02-02T11:05:00",
+        "fecha_respuesta": "2026-02-03T16:20:00",
+        "brevo_message_id": "<111111111111.1111111111@smtp-relay.example.net>",
+        "notas": "Solicita reunión para revisar el informe."
+      }
+    },
+    "constructora-inventada.cl": {
+      "nombre": "Constructora Inventada SpA",
+      "sector": "construccion",
+      "estado": "descartado",
+      "score_captacion": null,
+      "email_contacto": "",
+      "emails_encontrados": [],
+      "email_fecha": "",
+      "email_mx_valido": false,
+      "email_score": 0,
+      "flash_fecha": "",
+      "flash_pdf": null,
+      "flash_ciber_pdf": null,
+      "diagnostico_pdf": null,
+      "diagnostico_ciber_pdf": null,
+      "trabajo_fecha": null,
+      "trabajo_pdf": null,
+      "pdf_desincronizado": false,
+      "prefiltro_fallo": "sitio_sin_contenido",
+      "razon_descarte": "Dominio estacionado, sin contenido propio",
+      "scan_data": {},
+      "outreach": {}
+    }
+  }
+}

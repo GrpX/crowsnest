@@ -1,0 +1,64 @@
+# =============================================================================
+# CIBER-WORKSTATION — Docker Compose
+# Uso: docker-compose up -d && docker-compose exec ciber-workstation bash
+# =============================================================================
+
+services:
+  ciber-workstation:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ciber-workstation
+
+    # -------------------------------------------------------------------------
+    # Variables de entorno — define tus API keys en el archivo .env
+    # NUNCA subas el .env a Git (está en .gitignore)
+    # -------------------------------------------------------------------------
+    env_file: .env
+
+    # -------------------------------------------------------------------------
+    # Volúmenes — persistencia de datos entre sesiones
+    # -------------------------------------------------------------------------
+    volumes:
+      # Resultados de auditorías (no se borran al apagar el contenedor)
+      - ./reportes:/home/work/results
+
+      # Templates de nuclei (se actualizan sin reconstruir la imagen)
+      - ./config/nuclei:/root/.nuclei-templates
+
+      # Configuración de subfinder con API keys
+      - ./config/subfinder:/root/.config/subfinder
+
+      # Configuración de amass
+      - ./config/amass:/root/.config/amass
+
+      # Scripts de automatización (edítalos en tu host, se reflejan al instante)
+      - ./scripts:/home/work/scripts
+
+      # Lista de dominios objetivo (targets.txt, etc.)
+      - ./targets:/home/work/targets
+
+    # -------------------------------------------------------------------------
+    # Red: host permite que nmap y otras herramientas funcionen correctamente
+    # NOTA: en macOS usar 'bridge' en su lugar
+    # -------------------------------------------------------------------------
+    network_mode: host
+
+    # -------------------------------------------------------------------------
+    # Modo interactivo
+    # -------------------------------------------------------------------------
+    stdin_open: true
+    tty: true
+
+    # -------------------------------------------------------------------------
+    # Recursos — evita que nuclei consuma toda la RAM del host
+    # -------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 512M
+
+    # Reinicio manual solamente
+    restart: "no"

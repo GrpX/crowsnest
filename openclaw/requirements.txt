@@ -1,0 +1,24 @@
+# =============================================================================
+# OpenClaw Orchestrator — dependencias Python (versiones pineadas)
+# Instalar:  pip install -r openclaw/requirements.txt
+# =============================================================================
+
+# Cliente del servidor Ollama (paquete oficial; run_batch.py cae a la API REST
+# vía requests si este paquete no está disponible).
+ollama==0.6.2
+
+# Scraping de sitios PYME (descarga navegador headless con `crawl4ai-setup`).
+crawl4ai==0.8.6
+playwright==1.59.0
+
+# HTTP + parseo HTML del fallback de scraping.
+requests==2.34.2
+beautifulsoup4==4.14.3
+lxml==6.1.0
+
+# Validación de email: lookup DNS de registros MX (sin handshake SMTP).
+# Opcional: si falta, validate_email_mx() degrada a "dns_no_disponible".
+dnspython==2.8.0
+
+# Tests del módulo.
+pytest==9.0.3
