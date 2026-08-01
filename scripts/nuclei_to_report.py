@@ -917,6 +917,22 @@ def spanish_date() -> str:
     return f"{now.day} de {months[now.month-1]} de {now.year}"
 
 
+def load_summary(path: str | None) -> str:
+    """Lee el resumen del summarizer. Ausente o ilegible -> cadena vacia.
+
+    El informe NO depende de esto: sin backend LLM el campo queda vacio y la
+    plantilla omite la seccion.
+    """
+    if not path:
+        return ""
+    p = Path(path)
+    if not p.is_file():
+        print(f"[!] No existe el resumen: {p}; se genera el informe sin el.",
+              file=sys.stderr)
+        return ""
+    return p.read_text(encoding="utf-8").strip()
+
+
 def build_report(args, nuclei_findings, email_block, email_formal, technologies,
                  dmarc_data=None, nmap_findings=None, compliance_fw=None) -> dict:
     # Combinar hallazgos: email → nuclei → nmap; re-numerar IDs
@@ -948,6 +964,9 @@ def build_report(args, nuclei_findings, email_block, email_formal, technologies,
     # Encuadre de cumplimiento: lo aporta el framework activo, no el motor.
     compliance = build_compliance_block(compliance_fw, all_findings)
 
+    # Resumen redactado por el LLM (opcional).
+    narrative = load_summary(getattr(args, "summary", None))
+
     return {
         "report_type": report_type,
         "compliance":  compliance,
@@ -969,6 +988,9 @@ def build_report(args, nuclei_findings, email_block, email_formal, technologies,
             "domain": args.domain,
         },
         "executive_summary": {
+            # narrative es OPCIONAL: lo aporta el summarizer del pipeline LLM.
+            # Sin backend disponible queda vacio y la plantilla lo omite.
+            "narrative":             narrative,
             "risk_score":            risk["score"],
             "risk_level":            risk["level"],
             "total_findings":        len(all_findings),
@@ -996,6 +1018,10 @@ def main():
     parser.add_argument("--report-type", default="summary",
                         choices=["summary", "detailed", "remediation"],
                         help="Tipo de informe: summary (default), detailed o remediation")
+    parser.add_argument("--summary", default=None,
+                        help="Archivo de texto con el resumen ejecutivo redactado "
+                             "por el summarizer (opcional). Si se omite, el informe "
+                             "se genera sin esa seccion.")
     parser.add_argument("--compliance", default=None,
                         help="Id del framework de cumplimiento (config/compliance/). "
                              "Si se omite, usa CROWSNEST_COMPLIANCE_FRAMEWORK o el unico disponible.")

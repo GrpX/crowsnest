@@ -60,7 +60,7 @@ RUN pip install --upgrade pip && pip install \
     python-dotenv rich
 
 # 4b. OPENCLAW ORCHESTRATOR — cliente Ollama + Crawl4AI
-# Enriquecimiento de targets PYME con agentes Ollama locales.
+# Enriquecimiento de targets con agentes LLM locales.
 RUN pip install \
     ollama \
     crawl4ai \
@@ -68,7 +68,7 @@ RUN pip install \
     beautifulsoup4 lxml \
     pytest
 
-# Navegador headless (Chromium) que usa Crawl4AI para el scraping de sitios PYME.
+# Navegador headless (Chromium) que usa Crawl4AI para el scraping de sitios.
 # --with-deps instala tambien las librerias de sistema necesarias.
 RUN apt-get update -y \
     && playwright install --with-deps chromium \

@@ -216,7 +216,7 @@ PYEOF
 }
 
 # =============================================================================
-# MODO 0: TARGETS — scraping multi-fuente de PYMES chilenas
+# MODO 0: TARGETS — enriquecimiento de la lista de dominios objetivo
 # =============================================================================
 # =============================================================================
 # MODO 0.5: ENRIQUECER — OpenClaw Orchestrator (Ollama + Crawl4AI)
@@ -645,6 +645,14 @@ _run_report() {
     else
         echo "" > /tmp/empty.jsonl
         COMMON_ARGS+=("--input" "/tmp/empty.jsonl")
+    fi
+
+    # Resumen del summarizer: opcional. Si el pipeline LLM no corrio, el
+    # informe se genera igual sin esa seccion.
+    local SUMMARY_TXT="${SESSION_DIR}/summary_${SAFE_DOM}.txt"
+    if [[ -s "${SUMMARY_TXT}" ]]; then
+        info "Resumen del summarizer: ${GRAY}$(basename "${SUMMARY_TXT}")${NC}"
+        COMMON_ARGS+=("--summary" "${SUMMARY_TXT}")
     fi
     [[ -n "$DMARC_JSON" ]] && COMMON_ARGS+=("--dmarc" "${DMARC_JSON}")
     [[ -n "$TECH_JSON"  ]] && COMMON_ARGS+=("--tech"  "${TECH_JSON}")

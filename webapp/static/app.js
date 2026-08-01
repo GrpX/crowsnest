@@ -37,7 +37,7 @@ function toggleCmd(id) {
   }
 }
 
-// ── PROSPECTOS TABLE ──────────────────────────────────────
+// ── TARGETS TABLE ─────────────────────────────────────────
 
 async function loadTargets(filtro) {
   if (filtro) currentFilter = filtro;

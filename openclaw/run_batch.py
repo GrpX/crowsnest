@@ -2,17 +2,17 @@
 # =============================================================================
 # OpenClaw Orchestrator — Crowsnest
 # =============================================================================
-# Recibe un JSON de Google Places y devuelve targets PYME enriquecidos
-# mediante una cadena de 3 agentes Ollama:
+# Recibe una lista de dominios y devuelve targets enriquecidos
+# mediante una cadena de 3 agentes LLM:
 #
 #   orquestador  -> triage del negocio y angulo de abordaje
 #   descubridor  -> extrae dominio, email y cargo objetivo desde el sitio web
-#   redactor     -> redacta el mensaje de contacto en frio
+#   summarizer   -> redacta el resumen ejecutivo del informe (en ingles)
 #
-# El scraping del sitio PYME usa Crawl4AI, con fallback a requests + BeautifulSoup.
+# El scraping del sitio usa Crawl4AI, con fallback a requests + BeautifulSoup.
 #
 # Salida: lista JSON de objetos
-#   {name, dominio, cargo_objetivo, email, mensaje, mensaje_status,
+#   {name, dominio, cargo_objetivo, email, summary, summary_status,
 #    confianza, flash_json_usado, hallazgos_usados}
 #
 # Uso:
@@ -79,18 +79,39 @@ def load_config(path=DEFAULT_CONFIG) -> dict:
         raise FileNotFoundError(f"No se encontro la configuracion: {p}")
     cfg = json.loads(p.read_text(encoding="utf-8"))
     agentes = cfg.get("agentes", {})
-    for nombre in ("orquestador", "descubridor", "redactor"):
+    for nombre in ("orquestador", "descubridor", "summarizer"):
         if nombre not in agentes:
             raise ValueError(f"Falta el agente '{nombre}' en {p}")
-        if not agentes[nombre].get("model"):
-            raise ValueError(f"El agente '{nombre}' no declara 'model' en {p}")
+        if not agent_model(cfg, nombre):
+            raise ValueError(
+                f"El agente '{nombre}' no declara modelo en {p} ni en "
+                f"{model_env_var(nombre)}")
     return cfg
 
 
+def model_env_var(agente: str) -> str:
+    """Variable de entorno que sobreescribe el modelo de un agente."""
+    return f"CROWSNEST_MODEL_{agente.upper()}"
+
+
+def agent_model(config: dict, agente: str) -> str:
+    """Modelo de un agente.
+
+    Precedencia: CROWSNEST_MODEL_<AGENTE> > CROWSNEST_MODEL > config.json.
+    Ningun nombre de modelo vive en el codigo: si config y entorno estan
+    vacios, devuelve "" y load_config aborta.
+    """
+    env = (os.environ.get(model_env_var(agente))
+           or os.environ.get("CROWSNEST_MODEL") or "").strip()
+    if env:
+        return env
+    return str(config.get("agentes", {}).get(agente, {}).get("model", "")).strip()
+
+
 def required_models(config: dict) -> set:
-    """Conjunto de modelos Ollama referenciados por los agentes."""
-    return {a["model"].strip() for a in config.get("agentes", {}).values()
-            if a.get("model")}
+    """Conjunto de modelos referenciados por los agentes, ya resueltos."""
+    modelos = {agent_model(config, n) for n in config.get("agentes", {})}
+    return {m for m in modelos if m}
 
 
 # ─── CLIENTE OLLAMA ─────────────────────────────────────────────────────────
@@ -114,8 +135,21 @@ class OllamaClient:
 
     @classmethod
     def from_config(cls, config: dict) -> "OllamaClient":
-        o = config.get("ollama", {})
-        host = os.environ.get("OLLAMA_HOST") or o.get("host") or "http://localhost:11434"
+        """Construye el cliente desde config + entorno.
+
+        El endpoint no esta quemado en el codigo. Precedencia:
+        LLM_BASE_URL > OLLAMA_HOST > config.llm.base_url. Si ninguno esta
+        definido, aborta: adivinar un endpoint hace fallar el batch entero
+        con un error de red confuso en vez de uno de configuracion.
+        """
+        o = config.get("llm", config.get("ollama", {}))
+        host = (os.environ.get("LLM_BASE_URL")
+                or os.environ.get("OLLAMA_HOST")
+                or o.get("base_url") or o.get("host") or "").strip()
+        if not host:
+            raise ValueError(
+                "Sin endpoint del backend LLM. Define LLM_BASE_URL, OLLAMA_HOST "
+                "o llm.base_url en config.json.")
         return cls(host, int(o.get("request_timeout", 180)), o.get("keep_alive", "5m"))
 
     def list_models(self) -> set:
@@ -396,13 +430,13 @@ def _cf_decoded_emails(html: str) -> list:
 
 
 def extract_site_emails(html: str, texto: str, prospect_domain: str) -> list:
-    """Lista priorizada de emails reales del sitio PYME.
+    """Lista priorizada de emails publicados en el sitio.
 
     Une los mailto: del HTML (que Crawl4AI pierde al pasar a markdown), los
     emails ofuscados por Cloudflare, el regex sobre el HTML crudo y el regex
     sobre el texto. Descarta emails de plataformas/herramientas y ordena:
     primero los del dominio del target, luego el resto (incluye
-    gmail/personales, validos para PYMEs chilenas).
+    gmail/personales).
     """
     dominio = (prospect_domain or "").strip().lower()
     html_dec = _html_entities.unescape(html or "")     # &#64; -> @
@@ -428,7 +462,7 @@ def extract_site_emails(html: str, texto: str, prospect_domain: str) -> list:
     return sorted(validos, key=_orden)        # estable: respeta orden de hallazgo
 
 
-# ─── SCRAPING DE SITIOS PYME (Crawl4AI + fallback) ──────────────────────────
+# ─── SCRAPING DEL SITIO DEL TARGET (Crawl4AI + fallback) ────────────────────
 def _crawl_text(result) -> str:
     """Extrae texto de un CrawlResult de forma tolerante a versiones de Crawl4AI."""
     md = getattr(result, "markdown", None)
@@ -518,7 +552,7 @@ def get_subpage_urls(texto: str, base_url: str) -> list:
 
 
 class SiteScraper:
-    """Scraper de sitios PYME. Usa Crawl4AI; cae a requests + BeautifulSoup."""
+    """Scraper del sitio del target. Usa Crawl4AI; cae a requests + BeautifulSoup."""
 
     def __init__(self, cfg: dict):
         self.cfg = cfg or {}
@@ -538,7 +572,7 @@ class SiteScraper:
                 except TypeError:
                     self._crawler = AsyncWebCrawler()
                 await self._crawler.__aenter__()
-                info("Crawl4AI activo para el scraping de sitios PYME.")
+                info("Crawl4AI activo para el scraping de sitios.")
             except Exception as e:  # noqa: BLE001
                 warn(f"Crawl4AI no disponible ({e}); usando fallback requests.")
                 self._crawler = None
@@ -610,7 +644,7 @@ class SiteScraper:
 
     def _http_get(self, url: str):
         """GET con cabeceras de scraper. Si el certificado TLS no valida
-        (PYMEs con cert solo para www, cadenas incompletas, etc.) reintenta una
+        (cert solo para www, cadenas incompletas, etc.) reintenta una
         vez sin verificar: el objetivo es leer el sitio publico, no autenticarlo.
         """
         hdrs = {"User-Agent": self.ua, "Accept-Language": "es-CL,es;q=0.9"}
@@ -661,7 +695,7 @@ def check_domain_alive(url: str, cfg: dict) -> tuple[bool, str, str, bool]:
     - `pasa` es False si el dominio esta muerto/abandonado/insuficiente.
     - `skip_reason` queda en '' cuando el dominio pasa.
     - `dominio_alternativo` es '' salvo que la peticion (con allow_redirects) haya
-      aterrizado en otro dominio: en ese caso es el dominio destino (la PYME pudo
+      aterrizado en otro dominio: en ese caso es el dominio destino (el target pudo
       migrar) y solo se calcula si cfg["detectar_migracion"] esta activo.
     - `necesita_js` es True cuando el servidor respondio 2xx pero el contenido
       crudo es menor que cfg["min_content_chars"]. Indica al caller que el sitio
@@ -684,7 +718,7 @@ def check_domain_alive(url: str, cfg: dict) -> tuple[bool, str, str, bool]:
         return False, "error_http", "", False
 
     # Dominio destino tras seguir redirecciones: si difiere del original (y no es
-    # un subdominio suyo ni viceversa) puede ser el dominio nuevo de la PYME.
+    # un subdominio suyo ni viceversa) puede ser el dominio nuevo del target.
     dom_alt = ""
     if cfg.get("detectar_migracion", False):
         dom_final = extract_domain(getattr(r, "url", "") or "")
@@ -704,7 +738,7 @@ def check_domain_alive(url: str, cfg: dict) -> tuple[bool, str, str, bool]:
     text = r.text or ""
     if len(text.strip()) < cfg.get("min_content_chars", 300):
         # El servidor respondió 2xx pero el HTML crudo es esqueleto — típico de
-        # sitios PYME que cargan contenido vía JavaScript. No descartar: dejar
+        # sitios que cargan contenido vía JavaScript. No descartar: dejar
         # que Crawl4AI renderice y reintente.
         return False, "contenido_insuficiente", dom_alt, True
 
@@ -748,7 +782,7 @@ def _extract_json(text: str) -> dict:
 
 
 def _clean_message(text: str) -> str:
-    """Limpia el mensaje del redactor: fences, 'Asunto:', comillas envolventes."""
+    """Limpia texto del LLM: fences, 'Asunto:', comillas envolventes."""
     text = (text or "").strip()
     if text.startswith("```"):
         text = text.strip("`").strip()
@@ -825,7 +859,7 @@ def _truncar(texto, limite: int = 120) -> str:
     """Recorta `texto` a <= `limite` chars sin partir palabras.
 
     Prefiere cortar al final de una oracion dentro del limite; si no hay,
-    corta en un limite de palabra y agrega elipsis. Asi el redactor recibe
+    corta en un limite de palabra y agrega elipsis. Asi el LLM recibe
     un fragmento que se lee completo y no intenta inventar el final.
     """
     texto = str(texto or "").strip()
@@ -924,7 +958,7 @@ def load_hallazgos(domain: str):
 # ─── AGENTES ────────────────────────────────────────────────────────────────
 def run_orquestador(client: OllamaClient, cfg: dict, place: dict, *,
                     dominio_original: str = "", dominio_alternativo: str = "") -> dict:
-    # Si la PYME migro de dominio, se lo decimos al orquestador para que lo
+    # Si el target migro de dominio, se lo decimos al orquestador para que lo
     # incorpore al angulo (ver instruccion de migracion en su system_prompt).
     migracion = ""
     if dominio_original and dominio_alternativo:
@@ -982,143 +1016,90 @@ def run_descubridor(client: OllamaClient, cfg: dict, place: dict, plan: dict,
     }
 
 
-# ─── REDACTOR — CORREO DE PROSPECCION SOBRE TEMPLATE FIJO ───────────────────
-# El redactor ya no genera texto libre: rellena un template fijo con los
-# hallazgos reales del Flash JSON. Solo {impacto...} se redacta a partir de
-# key_recommendation; el resto son sustituciones directas.
-REDACTOR_SYSTEM = "Eres un redactor B2B chileno experto en ciberseguridad."
+# ─── SUMMARIZER — RESUMEN EJECUTIVO DEL INFORME ─────────────────────────────
+# Toma los hallazgos tecnicos del scan y produce el resumen ejecutivo en
+# ingles. Su salida es OPCIONAL: el motor de informes la consume si esta y la
+# omite si no, de modo que el informe se genera igual sin backend LLM.
 
-# La plantilla se entrega LITERAL al modelo, con sus {llaves} intactas.
-_REDACTOR_TEMPLATE = """\
-Estimado/a equipo de {nombre_empresa}:
+# Resultado de la etapa del summarizer. NO son estados del target: el ciclo de
+# vida del target vive en lib/states.py y no guarda relacion con esto. Se nombran
+# aparte para que "skipped" no se confunda con lib.states.SKIPPED.
+SUMMARY_OK       = "ok"
+SUMMARY_RETRY_OK = "retry_ok"
+SUMMARY_FAILED   = "failed"
+SUMMARY_SKIPPED  = "not_requested"
 
-Realizamos un análisis de superficie pública sobre {dominio} y detectamos {total_hallazgos} hallazgos, entre ellos:
-
-{hallazgo_1_severidad} {hallazgo_1_nombre}: {hallazgo_1_descripcion_corta}
-{hallazgo_2_severidad} {hallazgo_2_nombre}: {hallazgo_2_descripcion_corta}
-{hallazgo_3_severidad_si_existe} {hallazgo_3_nombre_si_existe}: {hallazgo_3_descripcion_corta_si_existe}
-
-En términos prácticos: {impacto_en_una_frase_max_20_palabras}.
-
-La Ley 21.719 entra en vigencia el 1 de diciembre de 2026. Durante el primer año, las PYMEs no reciben multas, pero sí amonestación pública en el Registro Nacional de Sanciones por 5 años — un registro que Google indexa y que clientes y contrapartes consultan antes de contratar.
-
-Para {tipo_empresa_descriptor}, esa publicación puede costar más que cualquier multa.
-
-Tengo un informe Flash específico para {dominio} con el detalle completo. Si quieren recibirlo, respondan este correo y se los envío de inmediato. Sin costo ni compromiso.
-
-Crowsnest"""
-
-
-def _datos_hallazgo(n: int, hallazgos: list) -> str:
-    """Linea 'hallazgo_n: [Severidad] Nombre — descripcion' para el bloque DATOS."""
+def _finding_line(n: int, hallazgos: list) -> str:
     if n - 1 < len(hallazgos):
         h = hallazgos[n - 1]
-        return (f"hallazgo_{n}: [{h['severity_label']}] {h['nombre']} "
-                f"— {h['descripcion']}")
-    return f"hallazgo_{n}: (no existe — omitir por completo esa línea del correo)"
+        return f"- [{h['severity_label']}] {h['nombre']}: {h['descripcion']}"
+    return ""
 
 
-def build_redactor_prompt(empresa: str, dominio: str, flash_data: dict,
-                          tipo: str) -> str:
-    """Arma el prompt fijo del redactor: instrucciones + template + datos."""
-    hallazgos = flash_data.get("hallazgos", [])
-    datos = "\n".join([
-        f"nombre_empresa: {empresa}",
-        f"dominio: {dominio}",
-        f"total_hallazgos: {flash_data.get('total_hallazgos')}",
-        _datos_hallazgo(1, hallazgos),
-        _datos_hallazgo(2, hallazgos),
-        _datos_hallazgo(3, hallazgos),
-        f"key_recommendation: {flash_data.get('key_recommendation', '')}",
-        f"tipo: {tipo or 'default'} (lawyer/health/accounting)",
-    ])
+def build_summarizer_prompt(dominio: str, scan: dict) -> str:
+    """Arma el prompt del summarizer con los hallazgos reales del scan."""
+    hallazgos = scan.get("hallazgos", [])
+    lineas = [l for l in (_finding_line(i, hallazgos) for i in range(1, 6)) if l]
     return (
-        "Redacta UN correo de prospección usando EXACTAMENTE este template.\n"
-        "Rellena SOLO las variables entre {llaves}. No agregues ni quites nada.\n"
-        "No uses palabras en inglés. Tono profesional chileno directo.\n\n"
-        "TEMPLATE:\n---\n"
-        f"{_REDACTOR_TEMPLATE}\n"
-        "---\n\n"
-        "DATOS PARA RELLENAR:\n"
-        f"{datos}\n\n"
-        "tipo_empresa_descriptor según tipo:\n"
-        '- lawyer → "un estudio jurídico"\n'
-        '- health → "un centro de salud"\n'
-        '- accounting → "una empresa contable"\n'
-        '- default → "una empresa de servicios profesionales"\n\n'
-        "Reglas:\n"
-        "- {impacto_en_una_frase_max_20_palabras} lo redactas tú a partir de "
-        "key_recommendation: una sola frase, máximo 20 palabras, sin tecnicismos.\n"
-        "- Incluye una línea por cada hallazgo presente en los datos. Si el "
-        "hallazgo 3 aparece, su línea es obligatoria; si no aparece, elimina "
-        "esa línea por completo.\n"
-        "- Las descripciones pueden venir cortadas con '…': cópialas literalmente, "
-        "no completes ni inventes el final.\n\n"
-        "Responde SOLO con el correo. Sin explicaciones, sin comillas, sin markdown."
+        "TARGET\n"
+        f"- Domain: {dominio}\n"
+        f"- Total findings: {scan.get('total_hallazgos', len(hallazgos))}\n\n"
+        "FINDINGS\n"
+        + ("\n".join(lineas) if lineas else "(no significant findings)")
+        + "\n\nWrite the executive summary."
     )
 
 
-def _verify_message(msg: str) -> bool:
-    """True si el texto parece valido: sin placeholders crudos ni meta-respuestas."""
-    if not msg or len(msg) < 120:
+def run_summarizer(client: OllamaClient, cfg: dict, dominio: str,
+                   scan: dict) -> str:
+    """Una pasada del summarizer; devuelve el resumen en ingles ya limpio."""
+    prompt = build_summarizer_prompt(dominio, scan)
+    raw = client.chat(cfg["model"], cfg["system_prompt"], prompt,
+                      temperature=cfg.get("temperature", 0.3),
+                      num_predict=cfg.get("num_predict", 400))
+    return _limpiar_texto(raw)
+
+
+def _limpiar_texto(txt: str) -> str:
+    """Quita fences, comillas envolventes y prefacios del modelo."""
+    t = (txt or "").strip()
+    if t.startswith("```"):
+        t = re.sub(r"^```[a-zA-Z]*\n?", "", t)
+        t = re.sub(r"\n?```$", "", t).strip()
+    if len(t) >= 2 and t[0] == t[-1] and t[0] in "\"'":
+        t = t[1:-1].strip()
+    return t
+
+
+def _valid_summary(txt: str) -> bool:
+    """Rechaza respuestas vacias, meta-respuestas o plantillas sin rellenar."""
+    if not txt or len(txt) < 80:
         return False
-    low = msg.lower()
-    if "redactar" in low or "template" in low:
+    low = txt.lower()
+    if low.startswith(("here is", "here's", "sure", "certainly")):
         return False
-    if re.search(r"\{[^}\n]*\}", msg):          # llaves sin rellenar
+    if re.search(r"\{[^}\n]*\}", txt):          # llaves sin rellenar
         return False
     return True
 
 
-def run_redactor(client: OllamaClient, cfg: dict, empresa: str, dominio: str,
-                 flash_data: dict, tipo: str, *, temperature: float) -> str:
-    """Una pasada del redactor sobre el template fijo; devuelve el correo limpio."""
-    prompt = build_redactor_prompt(empresa, dominio, flash_data, tipo)
-    num_predict = max(int(cfg.get("num_predict", 400)), 700)
-    raw = client.chat(cfg["model"], cfg.get("system_prompt") or REDACTOR_SYSTEM,
-                      prompt, temperature=temperature, num_predict=num_predict,
-                      json_mode=False)
-    return _clean_message(raw)
-
-
-def redactar_con_verificacion(client: OllamaClient, cfg: dict, empresa: str,
-                              dominio: str, flash_data: dict, tipo: str,
-                              cargo: str):
-    """Genera el correo, lo verifica y reintenta a temperatura 0.
-
-    Devuelve (mensaje, status) con status en
-    {'ok', 'fallback', 'REQUIERE_REVISION_MANUAL'}.
-    """
-    quien = dominio or empresa
+def summarize_con_verificacion(client: OllamaClient, cfg: dict, dominio: str,
+                               scan: dict) -> tuple:
+    """Devuelve (resumen, status). Ver las constantes SUMMARY_*."""
     try:
-        msg = run_redactor(client, cfg, empresa, dominio, flash_data, tipo,
-                           temperature=0.2)
-    except Exception as e:  # noqa: BLE001
-        warn(f"Redactor fallo en el intento 1 ({quien}): {e}")
-        return _mensaje_fallback(empresa, cargo), "fallback"
-    if _verify_message(msg):
-        return msg, "ok"
-
-    warn(f"Correo de {quien} no paso verificacion; regenerando a temperatura 0.")
+        txt = run_summarizer(client, cfg, dominio, scan)
+    except Exception as e:                                       # noqa: BLE001
+        warn(f"summarizer fallo en {dominio}: {e}")
+        return None, SUMMARY_FAILED
+    if _valid_summary(txt):
+        return txt, SUMMARY_OK
     try:
-        msg2 = run_redactor(client, cfg, empresa, dominio, flash_data, tipo,
-                            temperature=0.0)
-    except Exception as e:  # noqa: BLE001
-        warn(f"Redactor fallo en el intento 2 ({quien}): {e}")
-        return _mensaje_fallback(empresa, cargo), "fallback"
-    if _verify_message(msg2):
-        return msg2, "ok"
-
-    error(f"Correo de {quien}: REQUIERE_REVISION_MANUAL.")
-    return (msg2 or msg), "REQUIERE_REVISION_MANUAL"
-
-
-def _mensaje_fallback(empresa: str, cargo: str) -> str:
-    return (f"Estimado/a {cargo or 'responsable'} de {empresa}: en Crowsnest "
-            "ayudamos a PYMEs chilenas a revisar la seguridad de su presencia web. "
-            "Nos gustaria ofrecerle un informe Flash gratuito con un diagnostico "
-            "inicial de su sitio. Si le interesa, le compartimos los detalles "
-            "sin compromiso.")
+        txt2 = run_summarizer(client, cfg, dominio, scan)
+    except Exception:                                            # noqa: BLE001
+        return None, SUMMARY_FAILED
+    if _valid_summary(txt2):
+        return txt2, SUMMARY_RETRY_OK
+    return None, SUMMARY_FAILED
 
 
 # ─── VALIDACION MX + SCORE DE CALIDAD DEL EMAIL ─────────────────────────────
@@ -1221,7 +1202,7 @@ def _safe(label: str, fn, fallback):
 async def enrich_one(idx: int, total: int, place: dict, agentes: dict,
                      client: OllamaClient, scraper: SiteScraper,
                      batch_cfg: dict, full_config: dict, *,
-                     sin_redactor: bool = False) -> dict:
+                     sin_summary: bool = False) -> dict:
     empresa = place["name"] or "(sin nombre)"
     website = place["website"]
     migracion_detectada = False
@@ -1237,7 +1218,7 @@ async def enrich_one(idx: int, total: int, place: dict, agentes: dict,
         vivo, razon, dom_alt, necesita_js = await loop.run_in_executor(
             None, check_domain_alive, website, prefiltro_cfg)
         if not vivo and dom_alt:
-            # Dominio original muerto pero redirige a otro activo: la PYME migro.
+            # Dominio original muerto pero redirige a otro activo: el target migro.
             # No se descarta; el pipeline sigue con el dominio nuevo.
             dominio_original = extract_domain(website)
             dominio_alternativo = dom_alt
@@ -1259,13 +1240,13 @@ async def enrich_one(idx: int, total: int, place: dict, agentes: dict,
                 "dominio": extract_domain(website) or "",
                 "cargo_objetivo": "",
                 "email": "",
-                "mensaje": "",
+                "summary": None,
                 "confianza": 0.0,
                 "descartado": True,
                 "skip_reason": razon,
             }
 
-    # 1. Scraping del sitio PYME (Crawl4AI / requests)
+    # 1. Scraping del sitio del target (Crawl4AI / requests)
     sitio_texto, metodo, sitio_html = ("", "none", "")
     if website:
         sitio_texto, metodo, sitio_html = await scraper.fetch(website)
@@ -1306,14 +1287,14 @@ async def enrich_one(idx: int, total: int, place: dict, agentes: dict,
     flash_data, flash_json_usado = load_hallazgos(dominio)
     tipo = ""
 
-    # 4. REDACTOR — correo de prospeccion sobre el template fijo.
-    # --sin-redactor: batches de solo enriquecimiento (descubre dominio/email/MX)
-    # sin gastar tokens en llama3.1. El campo mensaje queda en null.
-    if sin_redactor:
-        mensaje, mensaje_status = None, "skipped"
+    # 4. SUMMARIZER — resumen ejecutivo del informe, a partir de los hallazgos.
+    # --no-summary: batches de solo enriquecimiento (dominio/email/MX) sin
+    # gastar tokens en el LLM. El campo summary queda en null.
+    if sin_summary:
+        summary, summary_status = None, SUMMARY_SKIPPED
     else:
-        mensaje, mensaje_status = redactar_con_verificacion(
-            client, agentes["redactor"], empresa, dominio, flash_data, tipo, cargo)
+        summary, summary_status = summarize_con_verificacion(
+            client, agentes["summarizer"], dominio, flash_data)
 
     confianza = compute_confianza(dominio, email, metodo, cargo,
                                   plan.get("viable", True), eq_score)
@@ -1321,7 +1302,7 @@ async def enrich_one(idx: int, total: int, place: dict, agentes: dict,
     marca = (f"{BG}OK{NC}" if confianza >= batch_cfg.get("confianza_minima", 0.35)
              else f"{YL}~~{NC}")
     info(f"[{idx}/{total}] {marca} {empresa[:32]:<32} "
-         f"dom={dominio or '-':<22} conf={confianza} msg={mensaje_status}")
+         f"dom={dominio or '-':<22} conf={confianza} sum={summary_status}")
 
     return {
         "name": empresa,
@@ -1329,8 +1310,8 @@ async def enrich_one(idx: int, total: int, place: dict, agentes: dict,
         "cargo_objetivo": cargo,
         "email": email,
         "emails_encontrados": emails_encontrados,
-        "mensaje": mensaje,
-        "mensaje_status": mensaje_status,
+        "summary": summary,
+        "summary_status": summary_status,
         "confianza": confianza,
         "email_mx_valido": mx_valido,
         "email_mx_razon": mx_razon,
@@ -1344,7 +1325,7 @@ async def enrich_one(idx: int, total: int, place: dict, agentes: dict,
 
 
 async def run_batch(places: list, config: dict, client: OllamaClient, *,
-                    sin_redactor: bool = False) -> list:
+                    sin_summary: bool = False) -> list:
     agentes = config["agentes"]
     batch_cfg = config.get("batch", {})
     pausa = float(batch_cfg.get("pausa_entre_targets_seg", 0))
@@ -1354,7 +1335,7 @@ async def run_batch(places: list, config: dict, client: OllamaClient, *,
             resultados.append(
                 await enrich_one(i, len(places), place, agentes, client,
                                  scraper, batch_cfg, config,
-                                 sin_redactor=sin_redactor))
+                                 sin_summary=sin_summary))
             if pausa and i < len(places):
                 await asyncio.sleep(pausa)
     return resultados
@@ -1529,15 +1510,15 @@ def print_summary(targets: list, config: dict) -> None:
     info(f"Con Flash JSON real   : {sum(1 for p in utiles if p.get('flash_json_usado'))}")
     estados = {}
     for p in utiles:
-        estado = p.get("mensaje_status", "?")
+        estado = p.get("summary_status", "?")
         estados[estado] = estados.get(estado, 0) + 1
-    info("Estado de mensajes    : "
+    info("Estado del resumen    : "
          + ", ".join(f"{k}={v}" for k, v in sorted(estados.items())))
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
-        description="OpenClaw Orchestrator - enriquece targets PYME de Google Places.")
+        description="OpenClaw Orchestrator - enriquece una lista de dominios objetivo.")
     ap.add_argument("input_pos", nargs="?",
                     help="Lista de dominios objetivo, uno por linea (posicional).")
     ap.add_argument("-i", "--input",
@@ -1559,10 +1540,10 @@ def main(argv=None) -> int:
     ap.add_argument("--include-discarded", action="store_true",
                     help="Incluir en la salida los dominios descartados por el "
                          "prefiltro (por defecto solo se escriben los utiles).")
-    ap.add_argument("--sin-redactor", action="store_true",
-                    help="Omitir la etapa del agente redactor (llama3.1). El campo "
-                         "mensaje queda en null y mensaje_status='skipped'. Util "
-                         "para batches de solo enriquecimiento.")
+    ap.add_argument("--no-summary", action="store_true",
+                    help="Omitir la etapa del summarizer. El campo summary queda "
+                         "en null y summary_status='not_requested'. Util para "
+                         "batches de solo enriquecimiento.")
     args = ap.parse_args(argv)
 
     try:
@@ -1597,7 +1578,7 @@ def main(argv=None) -> int:
     step(f"Enriqueciendo {len(places)} target(s)")
     t0 = time.time()
     targets = asyncio.run(run_batch(places, config, client,
-                                       sin_redactor=args.sin_redactor))
+                                       sin_summary=args.no_summary))
 
     descartados = [p for p in targets if p.get("descartado")]
     utiles = [p for p in targets if not p.get("descartado")]

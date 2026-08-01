@@ -7,7 +7,7 @@
 # vía requests si este paquete no está disponible).
 ollama==0.6.2
 
-# Scraping de sitios PYME (descarga navegador headless con `crawl4ai-setup`).
+# Scraping de sitios objetivo (descarga navegador headless con `crawl4ai-setup`).
 crawl4ai==0.8.6
 playwright==1.59.0
 

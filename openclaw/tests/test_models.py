@@ -2,18 +2,22 @@
 # =============================================================================
 # OpenClaw Orchestrator — tests
 # =============================================================================
-# Verifica que la configuracion sea coherente y que los modelos Ollama esten
-# disponibles ANTES de correr el batch de enriquecimiento.
+# Verifica que la configuracion sea coherente y que los modelos declarados
+# esten disponibles en el backend configurado ANTES de correr el batch.
+#
+# Los tests NO conocen ningun nombre de modelo: validan que cada agente declare
+# alguno y que ese alguno exista en el backend. Cambiar de modelo o de backend
+# es editar config.json (o el entorno), no este archivo.
 #
 # Ejecutar con pytest:        pytest openclaw/tests/
 # Ejecutar sin pytest:        python3 openclaw/tests/test_models.py
 #
 # Convenciones de resultado:
 #   - Los tests de configuracion son puros y siempre corren.
-#   - Si Ollama no responde, los tests dependientes se SALTAN (no fallan),
+#   - Si el backend no responde, los tests dependientes se SALTAN (no fallan),
 #     porque la maquina puede no tener el servidor levantado.
-#   - Si Ollama responde pero falta un modelo, el test FALLA con la instruccion
-#     exacta de `ollama pull` a ejecutar.
+#   - Si el backend responde pero falta un modelo declarado, el test FALLA
+#     nombrando exactamente cual.
 # =============================================================================
 import sys
 from pathlib import Path
@@ -25,7 +29,6 @@ sys.path.insert(0, str(MODULE_DIR))
 import run_batch  # noqa: E402
 
 CONFIG_PATH = MODULE_DIR / "config.json"
-MODELOS_ESPERADOS = {"qwen2.5:7b", "llama3.1:8b"}
 
 
 def _skip(reason: str):
@@ -46,40 +49,76 @@ def test_config_es_json_valido():
 
 def test_tres_agentes_definidos():
     agentes = _config()["agentes"]
-    assert set(agentes) == {"orquestador", "descubridor", "redactor"}, \
+    assert set(agentes) == {"orquestador", "descubridor", "summarizer"}, \
         f"agentes inesperados: {sorted(agentes)}"
     for nombre, a in agentes.items():
-        assert a.get("model"), f"el agente '{nombre}' no declara modelo"
         assert a.get("system_prompt"), f"el agente '{nombre}' no tiene system_prompt"
 
 
-def test_modelos_declarados_son_los_esperados():
-    modelos = run_batch.required_models(_config())
-    assert modelos <= MODELOS_ESPERADOS, \
-        f"modelos fuera de lo esperado: {modelos - MODELOS_ESPERADOS}"
-    assert "qwen2.5:7b" in modelos, "ningun agente usa qwen2.5:7b"
-    assert "llama3.1:8b" in modelos, "ningun agente usa llama3.1:8b"
+def test_cada_agente_declara_un_modelo():
+    """Cada agente resuelve a ALGUN modelo. Cual sea es irrelevante aqui."""
+    cfg = _config()
+    for nombre in cfg["agentes"]:
+        modelo = run_batch.agent_model(cfg, nombre)
+        assert modelo, (
+            f"el agente '{nombre}' no resuelve a ningun modelo: declaralo en "
+            f"config.json o en {run_batch.model_env_var(nombre)}")
+
+
+def test_el_entorno_puede_sobreescribir_el_modelo(monkeypatch=None):
+    """El modelo viene de config, pero el entorno manda."""
+    import os
+    cfg = _config()
+    nombre = sorted(cfg["agentes"])[0]
+    var = run_batch.model_env_var(nombre)
+    previo = os.environ.get(var)
+    os.environ[var] = "modelo-de-prueba:0b"
+    try:
+        assert run_batch.agent_model(cfg, nombre) == "modelo-de-prueba:0b", \
+            f"{var} no sobreescribe el modelo de config.json"
+    finally:
+        if previo is None:
+            os.environ.pop(var, None)
+        else:
+            os.environ[var] = previo
+
+
+def test_el_endpoint_no_esta_quemado_en_el_codigo():
+    """El backend se configura; el codigo no trae un endpoint fijo."""
+    import os
+    cfg = _config()
+    previo = os.environ.get("LLM_BASE_URL")
+    os.environ["LLM_BASE_URL"] = "http://backend-de-prueba:9999"
+    try:
+        client = run_batch.OllamaClient.from_config(cfg)
+        assert client.host == "http://backend-de-prueba:9999", \
+            "LLM_BASE_URL no sobreescribe el endpoint"
+    finally:
+        if previo is None:
+            os.environ.pop("LLM_BASE_URL", None)
+        else:
+            os.environ["LLM_BASE_URL"] = previo
 
 
 # ─── DISPONIBILIDAD DE OLLAMA (se saltan si no hay servidor) ────────────────
-def test_ollama_responde():
+def test_el_backend_responde():
     client = run_batch.OllamaClient.from_config(_config())
     try:
         client.list_models()
     except Exception as e:  # noqa: BLE001
-        _skip(f"Ollama no responde en {client.host}: {e}")
+        _skip(f"el backend LLM no responde en {client.host}: {e}")
 
 
-def test_modelos_disponibles_antes_del_batch():
+def test_los_modelos_declarados_estan_en_el_backend():
+    """Cada modelo declarado existe en el backend configurado, sea cual sea."""
     cfg = _config()
     client = run_batch.OllamaClient.from_config(cfg)
     ok, report = run_batch.verify_models(cfg, client)
     if not report["ollama_ok"]:
-        _skip(f"Ollama no responde en {report['host']}: {report.get('error', '')}")
+        _skip(f"el backend no responde en {report['host']}: {report.get('error', '')}")
     assert ok, (
-        "Faltan modelos en Ollama: " + ", ".join(report["faltantes"]) + ". "
-        "Descargalos con: "
-        + " ; ".join(f"ollama pull {m}" for m in report["faltantes"])
+        f"modelos declarados que faltan en {report['host']}: "
+        + ", ".join(report["faltantes"])
     )
 
 

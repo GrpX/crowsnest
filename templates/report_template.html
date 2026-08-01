@@ -76,6 +76,7 @@ p{color:var(--g2);margin-bottom:3mm;line-height:1.65}
 .disclaimer{background:var(--g1);color:#D4D4D0;padding:3mm 5mm;margin:3mm 0;border-left:3px solid var(--red);font-family:'DM Mono',monospace;font-size:6.5pt;line-height:1.6}
 .disclaimer-spam{background:#FAE0E4;color:var(--g2);border-left:3px solid var(--crit);font-family:'DM Sans',sans-serif;font-size:8pt;line-height:1.65;margin-bottom:2mm}
 .disclaimer-spam strong{color:var(--crit);font-size:8.5pt}
+.narrative{border-left:3px solid var(--g4);padding-left:4mm;margin:3mm 0;color:var(--g2)}
 .effort{font-family:'DM Mono',monospace;font-size:7pt;letter-spacing:.08em;text-transform:uppercase;padding:1.5px 6px;border:1px solid currentColor}
 .effort-low{color:var(--low)}
 .effort-medium{color:var(--med)}
@@ -290,7 +291,11 @@ p{color:var(--g2);margin-bottom:3mm;line-height:1.65}
   <div class="pc">
     <div class="sec-label">01 · Resumen Ejecutivo</div>
     <div class="sec-title">Resumen Ejecutivo</div>
-    <p>Diagnóstico de seguridad del dominio <strong style="font-family:'DM Mono',monospace">{{ client.domain }}</strong> realizado mediante reconocimiento pasivo e inspección de los servicios expuestos públicamente en internet. No se realizaron pruebas de intrusión activa.</p>
+    <p>Evaluación de superficie del dominio <strong style="font-family:'DM Mono',monospace">{{ client.domain }}</strong> mediante reconocimiento pasivo e inspección de los servicios expuestos públicamente en internet. No se realizaron pruebas de intrusión activa.</p>
+    {# narrative: opcional, la aporta el summarizer. Sin backend LLM se omite. #}
+    {% if executive_summary.narrative %}
+    <p class="narrative">{{ executive_summary.narrative }}</p>
+    {% endif %}
     <div class="sum-grid">
       <div class="sum-card"><div class="sum-n crit">{{ executive_summary.findings_by_severity.critical }}</div><div class="sum-lbl">Críticos</div></div>
       <div class="sum-card"><div class="sum-n high">{{ executive_summary.findings_by_severity.high }}</div><div class="sum-lbl">Altos</div></div>
