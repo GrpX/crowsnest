@@ -17,27 +17,27 @@ _user = _Admin()
 
 
 def get_password() -> str:
-    pwd = os.environ.get("WEBAPP_PASSWORD", "")
+    pwd = os.environ.get("CROWSNEST_WEBAPP_PASSWORD", "")
     if pwd:
         return pwd
     pwd = secrets.token_urlsafe(16)
     env_path = REPO_DIR / ".env"
     with open(env_path, "a") as f:
-        f.write(f"\nWEBAPP_PASSWORD={pwd}\n")
-    os.environ["WEBAPP_PASSWORD"] = pwd
-    print(f"[SINS webapp] Password generada y guardada en .env: {pwd}")
+        f.write(f"\nCROWSNEST_WEBAPP_PASSWORD={pwd}\n")
+    os.environ["CROWSNEST_WEBAPP_PASSWORD"] = pwd
+    print(f"[CROWSNEST webapp] Password generada y guardada en .env: {pwd}")
     return pwd
 
 
 def _get_secret_key() -> str:
-    key = os.environ.get("WEBAPP_SECRET_KEY", "")
+    key = os.environ.get("CROWSNEST_WEBAPP_SECRET_KEY", "")
     if key:
         return key
     key = secrets.token_hex(32)
     env_path = REPO_DIR / ".env"
     with open(env_path, "a") as f:
-        f.write(f"\nWEBAPP_SECRET_KEY={key}\n")
-    os.environ["WEBAPP_SECRET_KEY"] = key
+        f.write(f"\nCROWSNEST_WEBAPP_SECRET_KEY={key}\n")
+    os.environ["CROWSNEST_WEBAPP_SECRET_KEY"] = key
     return key
 
 

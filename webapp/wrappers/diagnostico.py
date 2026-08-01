@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 REPO_DIR = Path(__file__).parent.parent.parent.resolve()
-SINS = str(REPO_DIR / "sins.sh")
+CROWSNEST = str(REPO_DIR / "crowsnest.sh")
 REPORTES_DIR = REPO_DIR / "reportes"
 
 dominio = sys.argv[1] if len(sys.argv) > 1 else ""
@@ -30,16 +30,16 @@ if sessions:
                 pass
 
 if detected:
-    # sins.sh will detect name and ask "¿Usar este nombre? [S/n]" → accept
+    # crowsnest.sh will detect name and ask "¿Usar este nombre? [S/n]" → accept
     stdin = f"{dominio}\nS\ns\nN\n"
 elif cliente_arg:
-    # No auto-detected → sins.sh asks for name directly
+    # No auto-detected → crowsnest.sh asks for name directly
     stdin = f"{dominio}\n{cliente_arg}\ns\nN\n"
 else:
     stdin = f"{dominio}\n\ns\nN\n"
 
 proc = subprocess.run(
-    ["bash", SINS, "diagnostico"],
+    ["bash", CROWSNEST, "diagnostico"],
     input=stdin, text=True, cwd=str(REPO_DIR),
 )
 sys.exit(proc.returncode)

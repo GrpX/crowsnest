@@ -1,10 +1,10 @@
 # =============================================================================
-# CIBER-WORKSTATION — Imagen OSINT S.I.N.S.
+# CROWSNEST — Imagen OSINT Crowsnest
 # Usa binarios precompilados de ProjectDiscovery (versiones fijas)
 # =============================================================================
 FROM ubuntu:24.04
 
-LABEL maintainer="S.I.N.S. SpA"
+LABEL maintainer="Crowsnest"
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1

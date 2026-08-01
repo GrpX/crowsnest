@@ -74,5 +74,5 @@ def dashboard():
 
 if __name__ == "__main__":
     pwd = get_password()
-    print(f"\n[SINS webapp] http://0.0.0.0:5000  admin / {pwd}\n")
+    print(f"\n[CROWSNEST webapp] http://0.0.0.0:5000  admin / {pwd}\n")
     app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)

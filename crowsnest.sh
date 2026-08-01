@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # =============================================================================
-# sins.sh — CLI unificado de S.I.N.S.
+# crowsnest.sh — CLI unificado de Crowsnest
 # Uso:
-#   ./sins.sh targets enriquecer → enriquece targets con OpenClaw (LLM)
-#   ./sins.sh recon        → recon pasivo de targets (sin Docker, ~10 seg/dominio)
-#   ./sins.sh report       → genera informe completo (con Docker, ~20 min)
+#   ./crowsnest.sh targets enriquecer → enriquece targets con OpenClaw (LLM)
+#   ./crowsnest.sh recon        → recon pasivo de targets (sin Docker, ~10 seg/dominio)
+#   ./crowsnest.sh report       → genera informe completo (con Docker, ~20 min)
 #
 # Compatibilidad: Fedora KDE · Ubuntu · WSL2 (Windows 11)
 # =============================================================================
@@ -23,14 +23,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPORTES_DIR="${SCRIPT_DIR}/reportes"
 TARGETS_DIR="${SCRIPT_DIR}/targets"
 TARGETS_FILE="${TARGETS_DIR}/domains.txt"
-CONTAINER_NAME="sins-workstation-ciber-workstation"
+IMAGE_NAME="crowsnest:latest"
 DB_FILE="${SCRIPT_DIR}/db/targets.json"
 
 # ── HELPERS ──────────────────────────────────────────────────────────────────
 header() {
     clear
     echo -e "${RED}┌─────────────────────────────────────────────────────────┐${NC}"
-    echo -e "${RED}│${NC}  ${WHITE}S.I.N.S.${NC} ${GRAY}— SINS Is Not Static SpA${NC}                      ${RED}│${NC}"
+    echo -e "${RED}│${NC}  ${WHITE}Crowsnest${NC} ${GRAY}— reconocimiento pasivo${NC}                ${RED}│${NC}"
     echo -e "${RED}│${NC}  ${GRAY}$1${NC}"
     echo -e "${RED}└─────────────────────────────────────────────────────────┘${NC}"
     echo ""
@@ -61,8 +61,8 @@ check_docker_running() {
 }
 
 check_container_built() {
-    if ! docker image inspect "${CONTAINER_NAME}" &>/dev/null; then
-        error "La imagen '${CONTAINER_NAME}' no está construida."
+    if ! docker image inspect "${IMAGE_NAME}" &>/dev/null; then
+        error "La imagen '${IMAGE_NAME}' no está construida."
         echo -e "    Ejecuta primero: ${GRAY}docker-compose build${NC}"
         exit 1
     fi
@@ -247,15 +247,15 @@ cmd_targets_enriquecer() {
     local RO_OPT="ro${ZFLAG:+,z}"
     local OLLAMA_HOST_URL="${OLLAMA_HOST:-http://localhost:11434}"
 
-    # ── Localizar el JSON de Google Places ───────────────────────────────────
+    # ── Localizar la lista de dominios objetivo ──────────────────────────────
     local INPUT="${1:-}"
     if [[ -z "${INPUT}" ]]; then
-        INPUT=$(ls -t "${TARGETS_DIR}"/google_places*.json \
-                       "${REPORTES_DIR}"/google_places*.json 2>/dev/null | head -1 || echo "")
+        INPUT="${TARGETS_FILE}"
     fi
     if [[ -z "${INPUT}" || ! -f "${INPUT}" ]]; then
-        error "No se encontró un JSON de Google Places."
-        echo -e "  Uso: ${GRAY}./sins.sh targets enriquecer <ruta/google_places.json>${NC}"
+        error "No se encontró una lista de dominios objetivo."
+        echo -e "  Uso: ${GRAY}./crowsnest.sh targets enriquecer <ruta/dominios.txt>${NC}"
+        echo -e "  Por defecto: ${GRAY}${TARGETS_FILE}${NC}"
         exit 1
     fi
     INPUT="$(cd "$(dirname "${INPUT}")" && pwd)/$(basename "${INPUT}")"
@@ -275,19 +275,19 @@ cmd_targets_enriquecer() {
     # ── Ejecutar: preferir el contenedor (trae Crawl4AI + cliente Ollama) ─────
     if command -v "${DOCKER_BIN%% *}" &>/dev/null \
        && ${DOCKER_BIN} info &>/dev/null \
-       && ${DOCKER_BIN} image inspect "${CONTAINER_NAME}" &>/dev/null; then
-        info "Ejecutando dentro del contenedor ${GRAY}${CONTAINER_NAME}${NC}..."
+       && ${DOCKER_BIN} image inspect "${IMAGE_NAME}" &>/dev/null; then
+        info "Ejecutando en un contenedor de ${GRAY}${IMAGE_NAME}${NC}..."
         ${DOCKER_BIN} run --rm \
             --network host \
             -e OLLAMA_HOST="${OLLAMA_HOST_URL}" \
             -v "${OPENCLAW_DIR}:/home/work/openclaw${ZFLAG}" \
-            -v "${INPUT}:/home/work/input/places.json:${RO_OPT}" \
+            -v "${INPUT}:/home/work/input/domains.txt:${RO_OPT}" \
             -v "${REPORTES_DIR}:/home/work/results${ZFLAG}" \
             -v "${SCRIPT_DIR}/db:/home/work/db${ZFLAG}" \
-            "${CONTAINER_NAME}" \
+            "${IMAGE_NAME}" \
             python3 /home/work/openclaw/run_batch.py \
                 --config /home/work/openclaw/config.json \
-                --input  /home/work/input/places.json \
+                --input  /home/work/input/domains.txt \
                 --output "/home/work/results/${OUT_NAME}"
     else
         warn "Imagen Docker no disponible — usando el Python del host."
@@ -482,7 +482,7 @@ PYEOF
 
     # Guardar resultados
     {
-        echo "# S.I.N.S. — Resultados de recon ${SESSION_DATE}"
+        echo "# Crowsnest — Resultados de recon ${SESSION_DATE}"
         echo "# Formato: SCORE | PRIORITY_HIT | DOMINIO | PROBLEMAS"
         for r in "${TODOS[@]}"; do echo "$r"; done
     } > "${RESULTS_FILE}"
@@ -497,12 +497,12 @@ PYEOF
         read -r resp
         if [[ "${resp,,}" == "s" ]]; then
             PRIMER="${PRIORITY[0]}"
-            ask "Nombre del cliente para '${PRIMER}' (ej: Estudio Jurídico González):"
+            ask "Nombre del target para '${PRIMER}' (ej: Ejemplo S.A.):"
             read -r nombre_cliente
             _run_report "$PRIMER" "$nombre_cliente"
         else
             info "Cuando quieras el informe, ejecuta:"
-            echo -e "  ${GRAY}./sins.sh report${NC}"
+            echo -e "  ${GRAY}./crowsnest.sh report${NC}"
         fi
     else
         warn "Ningún target prioritario en esta sesión."
@@ -522,7 +522,7 @@ cmd_report() {
     check_container_built
 
     # ── Modo directo (no-interactivo) ─────────────────────────────────────────
-    # ./sins.sh report dominio.cl "Nombre Empresa"  → salta el menú de prioritarios
+    # ./crowsnest.sh report dominio.cl "Nombre Empresa"  → salta el menú de prioritarios
     if [[ -n "${1:-}" ]]; then
         _run_report "$1" "${2:-$1}"
         return
@@ -582,7 +582,7 @@ PYEOF
 
     DOMINIO="${DOMINIO#https://}"; DOMINIO="${DOMINIO#http://}"; DOMINIO="${DOMINIO%%/*}"
 
-    ask "Nombre del cliente (ej: Estudio Jurídico González Ltda.):"
+    ask "Nombre del target (ej: Ejemplo S.A.):"
     read -r CLIENTE
 
     echo ""
@@ -607,8 +607,8 @@ _run_report() {
     # aqui solo se nombran los artefactos.
     local DB_REPORT_KEY="report_pdf"
     local DB_DETAIL_KEY="detailed_report_pdf"
-    local REPORT_BASE="SINS_Report"
-    local DETAIL_BASE="SINS_Detailed"
+    local REPORT_BASE="Crowsnest_Report"
+    local DETAIL_BASE="Crowsnest_Detailed"
     local JSON_REPORT="report_${SAFE_DOM}.json"
     local JSON_DETAIL="detailed_${SAFE_DOM}.json"
 
@@ -626,7 +626,7 @@ _run_report() {
         -v "${REPORTES_DIR}:/home/work/results:z" \
         -v "${SCRIPT_DIR}/config:/root/.config/subfinder:z" \
         -v "${SCRIPT_DIR}/scripts:/home/work/scripts:ro,z" \
-        "${CONTAINER_NAME}" \
+        "${IMAGE_NAME}" \
         bash /home/work/scripts/audit.sh "${DOMINIO}" "/home/work/results/${SAFE_DOM}_${TIMESTAMP}" 2>&1 | \
         grep -E "^\[|subfinder|httpx|checkdmarc|whatweb|nuclei|encontró|Total|✓" || true
 
@@ -708,7 +708,7 @@ cmd_diagnostico() {
 
     if [[ -z "$SESSION_DIR" ]] || [[ ! -d "$SESSION_DIR" ]]; then
         error "No se encontró sesión previa para '${DOMINIO}' en ${REPORTES_DIR}/"
-        info "Genera un escaneo primero con: ${GRAY}./sins.sh report${NC}"
+        info "Genera un escaneo primero con: ${GRAY}./crowsnest.sh report${NC}"
         exit 1
     fi
 
@@ -741,7 +741,7 @@ except: pass
             read -r CLIENTE
         fi
     else
-        ask "Nombre del cliente (ej: Estudio Jurídico González Ltda.):"
+        ask "Nombre del target (ej: Ejemplo S.A.):"
         read -r CLIENTE
     fi
 
@@ -769,7 +769,7 @@ _regen_diagnostico() {
     TECH_JSON=$(find   "${SESSION_DIR}" -name "whatweb_${DOMINIO}.json"    2>/dev/null | head -1 || echo "")
 
     local DETAIL_JSON="${SESSION_DIR}/detailed_${SAFE_DOM}.json"
-    local DIAG_PDF="${SESSION_DIR}/SINS_Detailed_${SAFE_DOM}_${TIMESTAMP}.pdf"
+    local DIAG_PDF="${SESSION_DIR}/Crowsnest_Detailed_${SAFE_DOM}_${TIMESTAMP}.pdf"
 
     step "Regenerando diagnóstico de impacto PDF (sin nuevo escaneo)"
 
@@ -840,7 +840,7 @@ cmd_trabajo() {
     read -r DOMINIO
     DOMINIO="${DOMINIO#https://}"; DOMINIO="${DOMINIO#http://}"; DOMINIO="${DOMINIO%%/*}"
 
-    ask "Nombre del cliente (ej: Empresa Jurídica González Ltda.):"
+    ask "Nombre del target (ej: Ejemplo S.A.):"
     read -r CLIENTE
 
     ask "N° de autorización / referencia del contrato (ej: AUTH-2025-001):"
@@ -873,7 +873,7 @@ _run_trabajo() {
 
     # Registrar autorización para trazabilidad
     {
-        echo "# S.I.N.S. — Registro de autorización de escaneo"
+        echo "# Crowsnest — Registro de autorización de escaneo"
         echo "Fecha       : $(date)"
         echo "Cliente     : ${CLIENTE}"
         echo "Dominio     : ${DOMINIO}"
@@ -894,7 +894,7 @@ _run_trabajo() {
         -v "${REPORTES_DIR}:/home/work/results:z" \
         -v "${SCRIPT_DIR}/config:/root/.config/subfinder:z" \
         -v "${SCRIPT_DIR}/scripts:/home/work/scripts:ro,z" \
-        "${CONTAINER_NAME}" \
+        "${IMAGE_NAME}" \
         bash /home/work/scripts/audit.sh "${DOMINIO}" "/home/work/results/${SAFE_DOM}_${TIMESTAMP}" --full
 
     echo ""
@@ -908,7 +908,7 @@ _run_trabajo() {
     NMAP_JSON=$(find   "${AUDIT_DIR}" -path "*/nmap/nmap_${DOMINIO}.json" 2>/dev/null | head -1 || echo "")
 
     INFORME_JSON="${AUDIT_DIR}/remediation_${SAFE_DOM}.json"
-    PDF_OUT="${AUDIT_DIR}/SINS_Trabajo_${SAFE_DOM}_${TIMESTAMP}.pdf"
+    PDF_OUT="${AUDIT_DIR}/Crowsnest_Remediation_${SAFE_DOM}_${TIMESTAMP}.pdf"
 
     ARGS=("--client" "${CLIENTE}" "--domain" "${DOMINIO}" "--output" "${INFORME_JSON}")
     [[ -n "$NUCLEI_JSON" ]] && ARGS+=("--input" "${NUCLEI_JSON}") || {
@@ -1007,8 +1007,8 @@ cmd_batch() {
 
     if [[ -z "$TARGET_FILE" ]] || [[ ! -f "$TARGET_FILE" ]]; then
         error "No se encontró lista de targets prioritarios."
-        info "Genera una con: ${GRAY}./sins.sh recon${NC}"
-        info "O provee una ruta: ${GRAY}./sins.sh batch targets/mi_lista.txt${NC}"
+        info "Genera una con: ${GRAY}./crowsnest.sh recon${NC}"
+        info "O provee una ruta: ${GRAY}./crowsnest.sh batch targets/mi_lista.txt${NC}"
         exit 1
     fi
 
@@ -1093,7 +1093,7 @@ cmd_batch() {
     local BATCH_LOG_DIR="${REPORTES_DIR}/batch_${BATCH_TS}_logs"
     mkdir -p "$BATCH_LOG_DIR"
 
-    export BATCH_MODE=1
+    export CROWSNEST_BATCH_MODE=1
 
     declare -a PIDS=()
     declare -a PID_IDX=()
@@ -1166,7 +1166,7 @@ cmd_batch() {
         [[ ${#PIDS[@]} -gt 0 ]] && sleep 2
     done
 
-    unset BATCH_MODE
+    unset CROWSNEST_BATCH_MODE
 
     # ── Resumen ───────────────────────────────────────────────────────────────
     echo ""
@@ -1188,41 +1188,36 @@ cmd_batch() {
 # =============================================================================
 cmd_help() {
     header "Ayuda"
-    echo -e "  ${WHITE}./sins.sh targets${NC}"
-    echo -e "  ${GRAY}Scraping multi-fuente de PYMES chilenas por categoría y ciudad.${NC}"
-    echo -e "  ${GRAY}Fuentes: Páginas Amarillas + DuckDuckGo + Google Maps + Apollo.io${NC}"
-    echo -e "  ${GRAY}Analiza DMARC/SPF/TLS y guarda los prioritarios en targets/.${NC}"
+    echo -e "  ${WHITE}./crowsnest.sh targets enriquecer${NC}  ${GRAY}[ruta/dominios.txt]${NC}"
+    echo -e "  ${GRAY}Enriquece una lista de dominios con OpenClaw (agentes LLM).${NC}"
+    echo -e "  ${GRAY}Devuelve {name, dominio, email, confianza} por target.${NC}"
     echo ""
-    echo -e "  ${WHITE}./sins.sh targets enriquecer${NC}  ${GRAY}[ruta/google_places.json]${NC}"
-    echo -e "  ${GRAY}Enriquece un JSON de Google Places con OpenClaw (3 agentes Ollama).${NC}"
-    echo -e "  ${GRAY}Devuelve {empresa, dominio, cargo_objetivo, email, mensaje, confianza}.${NC}"
-    echo ""
-    echo -e "  ${WHITE}./sins.sh recon${NC}"
+    echo -e "  ${WHITE}./crowsnest.sh recon${NC}"
     echo -e "  ${GRAY}Califica targets con checkdmarc (sin Docker).${NC}"
     echo -e "  ${GRAY}Identifica quién tiene DMARC/SPF mal configurado.${NC}"
     echo ""
-    echo -e "  ${WHITE}./sins.sh report${NC}  ${GRAY}[dominio] [\"Nombre\"]${NC}"
+    echo -e "  ${WHITE}./crowsnest.sh report${NC}  ${GRAY}[dominio] [\"Nombre\"]${NC}"
     echo -e "  ${GRAY}Genera el informe resumido y el detallado desde un escaneo Docker.${NC}"
     echo -e "  ${GRAY}El marco de cumplimiento se elige en config/compliance/.${NC}"
     echo ""
-    echo -e "  ${WHITE}./sins.sh diagnostico${NC}"
+    echo -e "  ${WHITE}./crowsnest.sh diagnostico${NC}"
     echo -e "  ${GRAY}Regenera solo el PDF de diagnóstico desde la sesión más reciente.${NC}"
-    echo -e "  ${GRAY}Sin nuevo escaneo — útil para retoques o reenvíos sin costo adicional.${NC}"
+    echo -e "  ${GRAY}Sin nuevo escaneo — reutiliza los artefactos de la sesión.${NC}"
     echo ""
-    echo -e "  ${WHITE}./sins.sh trabajo${NC}"
-    echo -e "  ${GRAY}Pipeline completo para cliente autorizado (~35 min).${NC}"
+    echo -e "  ${WHITE}./crowsnest.sh trabajo${NC}"
+    echo -e "  ${GRAY}Pipeline completo sobre un objetivo autorizado (~35 min).${NC}"
     echo -e "  ${GRAY}Requiere autorización firmada. Genera informe técnico PDF.${NC}"
     echo ""
-    echo -e "  ${WHITE}./sins.sh batch${NC}  ${GRAY}[ruta/lista.txt]${NC}"
+    echo -e "  ${WHITE}./crowsnest.sh batch${NC}  ${GRAY}[ruta/lista.txt]${NC}"
     echo -e "  ${GRAY}Procesa la lista de targets prioritarios en paralelo (hasta 5 workers).${NC}"
     echo -e "  ${GRAY}Lee el archivo más reciente de targets/ o acepta ruta como argumento.${NC}"
-    echo -e "  ${GRAY}Genera Flash + Diagnóstico para cada dominio sin intervención manual.${NC}"
+    echo -e "  ${GRAY}Genera el informe resumido y el detallado de cada dominio.${NC}"
     echo ""
-    echo -e "  ${WHITE}./sins.sh webapp${NC}"
+    echo -e "  ${WHITE}./crowsnest.sh webapp${NC}"
     echo -e "  ${GRAY}Inicia la interfaz web Flask en http://0.0.0.0:5000${NC}"
     echo -e "  ${GRAY}Gestiona targets, lanza comandos y ve el output en tiempo real.${NC}"
     echo ""
-    echo -e "  ${GRAY}Próximamente: ./sins.sh monitoreo${NC}"
+    echo -e "  ${GRAY}Próximamente: ./crowsnest.sh monitoreo${NC}"
     echo ""
 }
 
@@ -1235,7 +1230,7 @@ case "${1:-help}" in
             enriquecer) cmd_targets_enriquecer "${@:3}" ;;
             *)
                 error "Subcomando desconocido: 'targets ${2:-}'"
-                echo -e "  Uso: ${GRAY}./sins.sh targets enriquecer [archivo]${NC}"
+                echo -e "  Uso: ${GRAY}./crowsnest.sh targets enriquecer [archivo]${NC}"
                 exit 1 ;;
         esac ;;
     recon)       cmd_recon ;;

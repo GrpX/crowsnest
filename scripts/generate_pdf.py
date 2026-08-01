@@ -42,7 +42,7 @@ def translate_finding_names(data: dict) -> dict:
     return data
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
-LOGO_PATH     = TEMPLATES_DIR / "sins_logo.svg"
+LOGO_PATH     = TEMPLATES_DIR / "crowsnest_logo.svg"
 
 # Una sola plantilla. Lo que antes eran dos variantes de marco legal ahora se
 # resuelve con el framework de cumplimiento activo (config/compliance/), que el
@@ -61,7 +61,7 @@ def get_logo_b64():
         with open(LOGO_PATH, 'rb') as f:
             return "data:image/svg+xml;base64," + base64.b64encode(f.read()).decode()
     # Logo embebido de emergencia si no existe el archivo
-    svg = '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80"><rect x="0" y="0" width="4" height="80" fill="#C8102E"/><text x="18" y="34" font-family="'Courier New',monospace" font-size="28" font-weight="700" letter-spacing="8" fill="#F5F4F0">S.I.N.S.</text><line x1="18" y1="42" x2="302" y2="42" stroke="#C8102E" stroke-width="1"/><text x="18" y="58" font-family="'Courier New',monospace" font-size="8" letter-spacing="3.5" fill="#9C9C9C">SINS IS NOT STATIC SpA</text><circle cx="308" cy="58" r="3" fill="#C8102E"/></svg>'''
+    svg = '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80"><rect x="0" y="0" width="4" height="80" fill="#C8102E"/><text x="18" y="34" font-family="'Courier New',monospace" font-size="28" font-weight="700" letter-spacing="8" fill="#F5F4F0">Crowsnest</text><line x1="18" y1="42" x2="302" y2="42" stroke="#C8102E" stroke-width="1"/><text x="18" y="58" font-family="'Courier New',monospace" font-size="8" letter-spacing="3.5" fill="#9C9C9C">CROWSNEST</text><circle cx="308" cy="58" r="3" fill="#C8102E"/></svg>'''
     return "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
 
 def render_html(data, template_path):

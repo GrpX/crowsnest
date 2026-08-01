@@ -1,7 +1,7 @@
 {
   "version": 1,
   "modulo": "openclaw_orchestrator",
-  "descripcion": "Orquestador de 3 agentes Ollama que enriquece prospectos PYME de S.I.N.S. a partir de un JSON de Google Places.",
+  "descripcion": "Orquestador de 3 agentes Ollama que enriquece prospectos PYME de Crowsnest a partir de un JSON de Google Places.",
   "ollama": {
     "host": "http://localhost:11434",
     "request_timeout": 180,
@@ -15,7 +15,7 @@
     "exclude_external_links": true,
     "max_chars": 6000,
     "scrape_subpages": true,
-    "user_agent": "SINS-OpenClaw/1.0 (auditoria de superficie de ataque; +https://sinsspa.cl)"
+    "user_agent": "Crowsnest-OpenClaw/1.0 (auditoria de superficie de ataque; +https://example.com)"
   },
   "batch": {
     "max_targets": 185,
@@ -43,7 +43,7 @@
       "temperature": 0.15,
       "num_predict": 400,
       "formato": "json",
-      "system_prompt": "Eres el agente ORQUESTADOR de S.I.N.S. (SINS Is Not Static SpA), una startup chilena de ciberseguridad para PYMEs. Recibes los datos crudos de un negocio obtenidos de Google Places. Decide si es un prospecto PYME viable y define el angulo de abordaje. Responde SIEMPRE en JSON, sin texto adicional, con estas claves exactas: viable (booleano), sector (string corto, ej: 'estudio juridico'), cargo_objetivo (cargo de la persona que toma decisiones, ej: 'Socio principal', 'Gerente General', 'Administrador'), prioridad ('alta'|'media'|'baja'), angulo (una sola frase con el gancho de ciberseguridad mas relevante para ese rubro). Considera NO viables: grandes empresas, entidades publicas, bancos, franquicias internacionales y multinacionales. No inventes datos de contacto. Si los datos incluyen dominio_original y dominio_alternativo, menciona en el campo angulo que la empresa migró de dominio — es una señal de que están activos y en crecimiento, buen momento para contactar."
+      "system_prompt": "Eres el agente ORQUESTADOR de Crowsnest, una startup chilena de ciberseguridad para PYMEs. Recibes los datos crudos de un negocio obtenidos de Google Places. Decide si es un prospecto PYME viable y define el angulo de abordaje. Responde SIEMPRE en JSON, sin texto adicional, con estas claves exactas: viable (booleano), sector (string corto, ej: 'estudio juridico'), cargo_objetivo (cargo de la persona que toma decisiones, ej: 'Socio principal', 'Gerente General', 'Administrador'), prioridad ('alta'|'media'|'baja'), angulo (una sola frase con el gancho de ciberseguridad mas relevante para ese rubro). Considera NO viables: grandes empresas, entidades publicas, bancos, franquicias internacionales y multinacionales. No inventes datos de contacto. Si los datos incluyen dominio_original y dominio_alternativo, menciona en el campo angulo que la empresa migró de dominio — es una señal de que están activos y en crecimiento, buen momento para contactar."
     },
     "descubridor": {
       "model": "qwen2.5:7b",
@@ -51,7 +51,7 @@
       "temperature": 0.1,
       "num_predict": 700,
       "formato": "json",
-      "system_prompt": "Eres el agente DESCUBRIDOR de S.I.N.S. Recibes los datos de un negocio y el contenido textual de su sitio web (puede venir vacio). Tu trabajo es extraer informacion de contacto VERIFICABLE, nunca inventada. Responde SIEMPRE en JSON, sin texto adicional, con estas claves exactas: dominio (dominio raiz del sitio sin http ni www, '' si no hay), email (correo de contacto que aparezca literalmente en el texto, '' si no aparece), cargo_objetivo (cargo del decisor; usa el sugerido por el orquestador si el sitio no aporta uno mejor), nombre_contacto ('' si no aparece), resumen_empresa (1 o 2 frases sobre que hace la empresa), senales (lista de observaciones de superficie de ataque visibles en el texto, ej: 'formulario de contacto', 'usa Gmail como correo corporativo', 'menciona pasarela de pagos'). REGLA CRITICA: si un email no esta literalmente en el texto recibido, deja email en ''. No inventes correos ni dominios."
+      "system_prompt": "Eres el agente DESCUBRIDOR de Crowsnest Recibes los datos de un negocio y el contenido textual de su sitio web (puede venir vacio). Tu trabajo es extraer informacion de contacto VERIFICABLE, nunca inventada. Responde SIEMPRE en JSON, sin texto adicional, con estas claves exactas: dominio (dominio raiz del sitio sin http ni www, '' si no hay), email (correo de contacto que aparezca literalmente en el texto, '' si no aparece), cargo_objetivo (cargo del decisor; usa el sugerido por el orquestador si el sitio no aporta uno mejor), nombre_contacto ('' si no aparece), resumen_empresa (1 o 2 frases sobre que hace la empresa), senales (lista de observaciones de superficie de ataque visibles en el texto, ej: 'formulario de contacto', 'usa Gmail como correo corporativo', 'menciona pasarela de pagos'). REGLA CRITICA: si un email no esta literalmente en el texto recibido, deja email en ''. No inventes correos ni dominios."
     },
     "redactor": {
       "model": "llama3.1:8b",

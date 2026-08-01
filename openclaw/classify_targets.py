@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # =============================================================================
-# Clasificador de targets — S.I.N.S.
+# Clasificador de targets — Crowsnest
 # =============================================================================
-# Separa los targets de db/targets.json en PYMEs reales (target SINS) y
+# Separa los targets de db/targets.json en PYMEs reales (target CROWSNEST) y
 # ruido (directorios, agregadores, SaaS de agendamiento/formularios).
 #
 # Por cada dominio:
@@ -60,8 +60,8 @@ _COLOR_CAT = {"PYME_REAL": BG, "DIRECTORIO": YL, "SAAS_TECNICO": CY,
 
 # ─── PROMPTS ────────────────────────────────────────────────────────────────
 SYSTEM_PROMPT = (
-    "Eres un clasificador experto de sitios web chilenos para S.I.N.S. "
-    "(SINS Is Not Static SpA), una startup de ciberseguridad que vende servicios "
+    "Eres un clasificador experto de sitios web chilenos para Crowsnest "
+    "(Crowsnest), una startup de ciberseguridad que vende servicios "
     "a PYMEs reales. Tu tarea es separar las PYMEs reales (clientes potenciales) "
     "del ruido (directorios, agregadores y plataformas SaaS). Respondes SIEMPRE "
     "en JSON valido, sin texto fuera del JSON, con exactamente estas claves: "
@@ -399,7 +399,7 @@ def cargar_config(path: str) -> dict:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
-        description="Clasifica los targets de S.I.N.S. (PYME real vs. ruido).")
+        description="Clasifica los targets de Crowsnest (PYME real vs. ruido).")
     ap.add_argument("-i", "--input", default=str(DEFAULT_INPUT),
                     help="db/targets.json (solo lectura).")
     ap.add_argument("-o", "--output", default=str(DEFAULT_OUTPUT),

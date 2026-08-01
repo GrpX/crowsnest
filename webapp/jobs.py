@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 logger = logging.getLogger(__name__)
 REPO_DIR = Path(__file__).parent.parent.resolve()
 WRAPPERS_DIR = Path(__file__).parent / "wrappers"
-SINS = str(REPO_DIR / "sins.sh")
+CROWSNEST = str(REPO_DIR / "crowsnest.sh")
 
 _jobs: dict = {}
 _lock = threading.Lock()
@@ -59,7 +59,7 @@ def _append(job_id: str, line: str):
 
 def _env() -> dict:
     e = os.environ.copy()
-    e["BATCH_MODE"] = "1"
+    e["CROWSNEST_BATCH_MODE"] = "1"
     return e
 
 
@@ -90,7 +90,7 @@ def _build(cmd: str, params: dict) -> tuple[list, str | None]:
     if cmd == "batch":
         target = params.get("target_file", "")
         workers = str(params.get("workers", 3))
-        args = ["bash", SINS, "batch"]
+        args = ["bash", CROWSNEST, "batch"]
         if target:
             args.append(str(REPO_DIR / "targets" / target))
         args += ["--workers", workers, "--confirm", "--auto-name"]

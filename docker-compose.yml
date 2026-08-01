@@ -1,14 +1,17 @@
 # =============================================================================
-# CIBER-WORKSTATION — Docker Compose
-# Uso: docker-compose up -d && docker-compose exec ciber-workstation bash
+# CROWSNEST — Docker Compose
+# Uso: docker-compose up -d && docker-compose exec crowsnest bash
 # =============================================================================
 
 services:
-  ciber-workstation:
+  crowsnest:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ciber-workstation
+    # Nombre de imagen explicito: sin esto compose la nombra <directorio>-<servicio>
+    # y crowsnest.sh no la encuentra si el repo se clona con otro nombre.
+    image: crowsnest:latest
+    container_name: crowsnest
 
     # -------------------------------------------------------------------------
     # Variables de entorno — define tus API keys en el archivo .env
@@ -26,11 +29,8 @@ services:
       # Templates de nuclei (se actualizan sin reconstruir la imagen)
       - ./config/nuclei:/root/.nuclei-templates
 
-      # Configuración de subfinder con API keys
-      - ./config/subfinder:/root/.config/subfinder
-
-      # Configuración de amass
-      - ./config/amass:/root/.config/amass
+      # Configuración de subfinder (config.yaml + provider-config.yaml con API keys)
+      - ./config:/root/.config/subfinder
 
       # Scripts de automatización (edítalos en tu host, se reflejan al instante)
       - ./scripts:/home/work/scripts

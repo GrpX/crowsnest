@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # =============================================================================
-# OpenClaw Orchestrator — S.I.N.S.
+# OpenClaw Orchestrator — Crowsnest
 # =============================================================================
 # Recibe un JSON de Google Places y devuelve targets PYME enriquecidos
 # mediante una cadena de 3 agentes Ollama:
@@ -525,7 +525,7 @@ class SiteScraper:
         self.max_chars = int(self.cfg.get("max_chars", 6000))
         self.wct = int(self.cfg.get("word_count_threshold", 15))
         self.timeout_ms = int(self.cfg.get("page_timeout_ms", 30000))
-        self.ua = self.cfg.get("user_agent", "SINS-OpenClaw/1.0")
+        self.ua = self.cfg.get("user_agent", "Crowsnest-OpenClaw/1.0")
         self.subpages_enabled = bool(self.cfg.get("scrape_subpages", True))
         self._crawler = None
 
@@ -768,13 +768,13 @@ def _clean_message(text: str) -> str:
 def _resolve_reportes_dir() -> Path:
     """Carpeta de informes Flash, valida tanto en el host como en el contenedor.
 
-    En el host es <repo>/reportes/. En Docker, `sins.sh batch` monta esa misma
-    carpeta en /home/work/results (ver los -v de sins.sh), de modo que aqui se
+    En el host es <repo>/reportes/. En Docker, `crowsnest.sh batch` monta esa misma
+    carpeta en /home/work/results (ver los -v de crowsnest.sh), de modo que aqui se
     ve como un hermano `results` de openclaw/, no `reportes`. Probamos ambos
-    nombres y devolvemos el primero que exista; OPENCLAW_REPORTES_DIR manda si
+    nombres y devolvemos el primero que exista; CROWSNEST_REPORTS_DIR manda si
     esta definido.
     """
-    env = os.environ.get("OPENCLAW_REPORTES_DIR")
+    env = os.environ.get("CROWSNEST_REPORTS_DIR")
     if env:
         return Path(env)
     for nombre in ("reportes", "results"):
@@ -992,8 +992,6 @@ REDACTOR_SYSTEM = "Eres un redactor B2B chileno experto en ciberseguridad."
 _REDACTOR_TEMPLATE = """\
 Estimado/a equipo de {nombre_empresa}:
 
-Mi nombre es Gabriel, fundador de S.I.N.S. (SINS Is Not Static SpA), empresa de ciberseguridad chilena.
-
 Realizamos un análisis de superficie pública sobre {dominio} y detectamos {total_hallazgos} hallazgos, entre ellos:
 
 {hallazgo_1_severidad} {hallazgo_1_nombre}: {hallazgo_1_descripcion_corta}
@@ -1008,10 +1006,7 @@ Para {tipo_empresa_descriptor}, esa publicación puede costar más que cualquier
 
 Tengo un informe Flash específico para {dominio} con el detalle completo. Si quieren recibirlo, respondan este correo y se los envío de inmediato. Sin costo ni compromiso.
 
-Gabriel
-S.I.N.S. — SINS Is Not Static SpA
-gabriel@sins.cl | sins.cl
-Santiago, Chile"""
+Crowsnest"""
 
 
 def _datos_hallazgo(n: int, hallazgos: list) -> str:
@@ -1064,12 +1059,10 @@ def build_redactor_prompt(empresa: str, dominio: str, flash_data: dict,
 
 
 def _verify_message(msg: str) -> bool:
-    """True si el correo parece valido: firma presente y sin placeholders crudos."""
+    """True si el texto parece valido: sin placeholders crudos ni meta-respuestas."""
     if not msg or len(msg) < 120:
         return False
     low = msg.lower()
-    if "gabriel@sins.cl" not in low:
-        return False
     if "redactar" in low or "template" in low:
         return False
     if re.search(r"\{[^}\n]*\}", msg):          # llaves sin rellenar
@@ -1121,7 +1114,7 @@ def redactar_con_verificacion(client: OllamaClient, cfg: dict, empresa: str,
 
 
 def _mensaje_fallback(empresa: str, cargo: str) -> str:
-    return (f"Estimado/a {cargo or 'responsable'} de {empresa}: en S.I.N.S. "
+    return (f"Estimado/a {cargo or 'responsable'} de {empresa}: en Crowsnest "
             "ayudamos a PYMEs chilenas a revisar la seguridad de su presencia web. "
             "Nos gustaria ofrecerle un informe Flash gratuito con un diagnostico "
             "inicial de su sitio. Si le interesa, le compartimos los detalles "
@@ -1373,8 +1366,8 @@ async def run_batch(places: list, config: dict, client: OllamaClient, *,
 # un paso manual. Es best-effort: si la DB no esta (p.ej. dentro del contenedor,
 # donde db/ no se monta) se avisa y el batch continua sin abortar.
 def _resolve_targets_db() -> Path:
-    """Ruta de la base maestra de targets. OPENCLAW_TARGETS_DB manda."""
-    env = os.environ.get("OPENCLAW_TARGETS_DB")
+    """Ruta de la base maestra de targets. CROWSNEST_TARGETS_DB manda."""
+    env = os.environ.get("CROWSNEST_TARGETS_DB")
     if env:
         return Path(env)
     return MODULE_DIR.parent / "db" / "targets.json"
@@ -1559,7 +1552,7 @@ def main(argv=None) -> int:
     ap.add_argument("--db",
                     help="Ruta de db/targets.json donde persistir los emails "
                          "(por defecto <repo>/db/targets.json o "
-                         "OPENCLAW_TARGETS_DB).")
+                         "CROWSNEST_TARGETS_DB).")
     ap.add_argument("--no-db-sync", action="store_true",
                     help="No escribir los emails encontrados de vuelta a "
                          "db/targets.json al terminar el batch.")

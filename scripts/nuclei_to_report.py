@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-nuclei_to_report.py — Convierte JSON de nuclei + checkdmarc a informe estructurado S.I.N.S.
+nuclei_to_report.py — Convierte JSON de nuclei + checkdmarc a informe estructurado Crowsnest
 
 Uso:
     python3 scripts/nuclei_to_report.py \
@@ -44,7 +44,7 @@ def available_frameworks() -> dict:
 def load_compliance(selected: str | None):
     """Carga el framework activo.
 
-    Precedencia: --compliance > COMPLIANCE_FRAMEWORK > el unico disponible.
+    Precedencia: --compliance > CROWSNEST_COMPLIANCE_FRAMEWORK > el unico disponible.
     Si hay varios y ninguno fue elegido, aborta listando los ids: adivinar el
     encuadre de cumplimiento de un informe seria peor que fallar.
     """
@@ -54,14 +54,14 @@ def load_compliance(selected: str | None):
               f"seccion de cumplimiento.")
         return None
 
-    fid = selected or os.environ.get("COMPLIANCE_FRAMEWORK")
+    fid = selected or os.environ.get("CROWSNEST_COMPLIANCE_FRAMEWORK")
     if not fid:
         if len(frameworks) == 1:
             fid = next(iter(frameworks))
         else:
             print("[✗] Hay varios frameworks de cumplimiento y ninguno seleccionado.",
                   file=sys.stderr)
-            print("    Usa --compliance <id> o COMPLIANCE_FRAMEWORK=<id>.", file=sys.stderr)
+            print("    Usa --compliance <id> o CROWSNEST_COMPLIANCE_FRAMEWORK=<id>.", file=sys.stderr)
             print("    Disponibles: " + ", ".join(sorted(frameworks)), file=sys.stderr)
             sys.exit(2)
 
@@ -513,12 +513,12 @@ def parse_dmarc(dmarc_data: dict | None, finding_offset: int = 0):
             "component": "Entregabilidad de correo",
             "status": "error",
             "detail": (
-                f"Sus correos pueden rebotar o llegar a spam: {', '.join(rebote_detail)}. "
-                f"Los servidores de destino rechazan o filtran correos de dominios sin "
-                f"autenticación válida."
+                f"El correo saliente del dominio puede ser rechazado o filtrado: "
+                f"{', '.join(rebote_detail)}. Los servidores de destino rechazan o "
+                f"filtran correo de dominios sin autenticación válida."
             ),
             "record": "",
-            "risk": "Crítico — correos propios rebotando o en spam",
+            "risk": "Crítico — correo saliente rechazado o filtrado",
         })
 
     # ── MX / TLS ──────────────────────────────────────────────────────────────
@@ -985,7 +985,7 @@ def build_report(args, nuclei_findings, email_block, email_formal, technologies,
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 def main():
-    parser = argparse.ArgumentParser(description="Generador de informes S.I.N.S.")
+    parser = argparse.ArgumentParser(description="Generador de informes Crowsnest")
     parser.add_argument("--input",       required=True,  help="JSONL de nuclei (puede estar vacío)")
     parser.add_argument("--dmarc",       default=None,   help="JSON de checkdmarc")
     parser.add_argument("--tech",        default=None,   help="JSON de whatweb")
@@ -998,7 +998,7 @@ def main():
                         help="Tipo de informe: summary (default), detailed o remediation")
     parser.add_argument("--compliance", default=None,
                         help="Id del framework de cumplimiento (config/compliance/). "
-                             "Si se omite, usa COMPLIANCE_FRAMEWORK o el unico disponible.")
+                             "Si se omite, usa CROWSNEST_COMPLIANCE_FRAMEWORK o el unico disponible.")
     args = parser.parse_args()
 
     print(f"[*] Procesando hallazgos de nuclei: {args.input}")

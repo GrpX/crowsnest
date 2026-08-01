@@ -1,5 +1,5 @@
 # =============================================================
-# SINS PORTFOLIO — .gitignore
+# CROWSNEST PORTFOLIO — .gitignore
 # Este repo es público: nunca versionar credenciales ni datos reales
 # =============================================================
 
@@ -9,15 +9,18 @@
 .env.*
 !.env.example
 
-# Datos reales de targets, objetivos y clientes — NUNCA en este repo
+# Datos reales de targets y resultados de escaneo — NUNCA en este repo
 db/
 targets/
 reportes/
 results/
 
-# Configuraciones con API keys incrustadas
-config/subfinder/provider-config.yaml
-config/amass/config.ini
+# Configuraciones con API keys incrustadas.
+# El template versionado es config/provider-config.example.yaml; copialo a
+# config/provider-config.yaml y rellena tus keys ahi.
+config/provider-config.yaml
+config/amass/
+config/nuclei/
 
 # Python
 __pycache__/
