@@ -17,7 +17,8 @@ safe_dom = dominio.replace(".", "_")
 sessions = sorted(REPORTES_DIR.glob(f"{safe_dom}_*"), reverse=True)
 detected = ""
 if sessions:
-    for pat in [f"flash_{safe_dom}.json", f"diagnostico_{safe_dom}.json"]:
+    for pat in [f"report_{safe_dom}.json", f"detailed_{safe_dom}.json",
+                    f"flash_{safe_dom}.json", f"diagnostico_{safe_dom}.json"]:
         f = sessions[0] / pat
         if f.exists():
             try:

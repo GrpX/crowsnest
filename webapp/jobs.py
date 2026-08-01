@@ -66,11 +66,11 @@ def _env() -> dict:
 def _build(cmd: str, params: dict) -> tuple[list, str | None]:
     py = sys.executable
 
-    if cmd == "flash":
+    if cmd == "report":
         return [
-            py, str(WRAPPERS_DIR / "flash.py"),
+            py, str(WRAPPERS_DIR / "report.py"),
             params.get("dominio", ""),
-            params.get("cliente", ""),
+            params.get("nombre", ""),
             "ciber" if params.get("ciber") else "",
         ], None
 

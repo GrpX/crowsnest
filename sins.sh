@@ -2,11 +2,10 @@
 # =============================================================================
 # sins.sh — CLI unificado de S.I.N.S.
 # Uso:
-#   ./sins.sh prospectos   → scraping multi-fuente de PYMES chilenas
-#   ./sins.sh prospectos enriquecer → enriquece prospectos con OpenClaw (Ollama)
-#   ./sins.sh captacion    → califica prospectos (sin Docker, ~10 seg/dominio)
-#   ./sins.sh flash        → genera informe flash completo (con Docker, ~20 min)
-#   ./sins.sh flash --ciber → informes con marco Ley 21.663 (Ley Marco de Ciberseguridad)
+#   ./sins.sh targets enriquecer → enriquece targets con OpenClaw (LLM)
+#   ./sins.sh recon        → recon pasivo de targets (sin Docker, ~10 seg/dominio)
+#   ./sins.sh report       → genera informe completo (con Docker, ~20 min)
+#   ./sins.sh report --ciber → informes con marco Ley 21.663 (Ley Marco de Ciberseguridad)
 #
 # Compatibilidad: Fedora KDE · Ubuntu · WSL2 (Windows 11)
 # =============================================================================
@@ -24,9 +23,9 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPORTES_DIR="${SCRIPT_DIR}/reportes"
 TARGETS_DIR="${SCRIPT_DIR}/targets"
-PROSPECTOS_FILE="${TARGETS_DIR}/prospectos.txt"
+TARGETS_FILE="${TARGETS_DIR}/domains.txt"
 CONTAINER_NAME="sins-workstation-ciber-workstation"
-DB_FILE="${SCRIPT_DIR}/db/prospectos.json"
+DB_FILE="${SCRIPT_DIR}/db/targets.json"
 
 # ── HELPERS ──────────────────────────────────────────────────────────────────
 header() {
@@ -99,45 +98,37 @@ _open_pdf() {
 }
 
 _db_update() {
-    local DOMINIO="$1" NOMBRE="$2" TIPO="$3" RUTA_PDF="$4" SCORE="${5:-null}"
+    local DOMINIO="$1" NOMBRE="$2" TIPO="$3" RUTA_PDF="$4"
     python3 - <<PYEOF
 import json, sys
 from pathlib import Path
 from datetime import datetime
 
 db_path = Path("${DB_FILE}")
-db = json.loads(db_path.read_text()) if db_path.exists() else {"version": 1, "prospectos": {}}
+db = json.loads(db_path.read_text()) if db_path.exists() else {"version": 1, "targets": {}}
 
-d = db["prospectos"].setdefault("${DOMINIO}", {
-    "nombre": "${NOMBRE}",
-    "flash_fecha": None, "flash_pdf": None,
-    "diagnostico_pdf": None,
-    "flash_ciber_pdf": None, "diagnostico_ciber_pdf": None,
-    "trabajo_fecha": None, "trabajo_pdf": None,
-    "score_captacion": None,
-    "estado": "nuevo"
+d = db["targets"].setdefault("${DOMINIO}", {
+    "name": "${NOMBRE}",
+    "report_at": None, "report_pdf": None,
+    "detailed_report_pdf": None,
+    "remediation_at": None, "remediation_pdf": None,
+    "skip_reason": "",
+    "status": "queued"
 })
 
-d["nombre"] = "${NOMBRE}"
+d["name"] = "${NOMBRE}"
 now = datetime.now().isoformat(timespec="seconds")
 
-if "${TIPO}" == "flash_pdf":
-    d["flash_fecha"] = now
-    d["flash_pdf"] = "${RUTA_PDF}"
-    d["estado"] = "flash_listo"
-elif "${TIPO}" == "diagnostico_pdf":
-    d["diagnostico_pdf"] = "${RUTA_PDF}"
-elif "${TIPO}" == "flash_ciber_pdf":
-    d["flash_ciber_pdf"] = "${RUTA_PDF}"
-elif "${TIPO}" == "diagnostico_ciber_pdf":
-    d["diagnostico_ciber_pdf"] = "${RUTA_PDF}"
-elif "${TIPO}" == "trabajo_pdf":
-    d["trabajo_fecha"] = now
-    d["trabajo_pdf"] = "${RUTA_PDF}"
-    d["estado"] = "trabajo_entregado"
-
-if "${SCORE}" != "null":
-    d["score_captacion"] = int("${SCORE}")
+if "${TIPO}" == "report_pdf":
+    d["report_at"] = now
+    d["report_pdf"] = "${RUTA_PDF}"
+    d["status"] = "reported"
+elif "${TIPO}" == "detailed_report_pdf":
+    d["detailed_report_pdf"] = "${RUTA_PDF}"
+elif "${TIPO}" == "remediation_pdf":
+    d["remediation_at"] = now
+    d["remediation_pdf"] = "${RUTA_PDF}"
+    d["status"] = "reported"
 
 db_path.parent.mkdir(parents=True, exist_ok=True)
 db_path.write_text(json.dumps(db, ensure_ascii=False, indent=2))
@@ -145,12 +136,12 @@ print(f"[✓] DB actualizada: ${DOMINIO} → ${TIPO}")
 PYEOF
 }
 
-# _db_update_scan — registra scan_data + session_folder tras un escaneo Flash.
-# A diferencia de _db_update, NO toca flash_pdf/diagnostico_pdf: el PDF se
-# genera bajo demanda cuando el prospecto responde (scripts/enviar_flash.py).
+# _db_update_scan — registra scan_data + session_folder tras un escaneo.
+# A diferencia de _db_update, NO toca report_pdf/detailed_report_pdf: los PDFs
+# se generan aparte desde el JSON que deja este paso.
 _db_update_scan() {
-    local DOMINIO="$1" NOMBRE="$2" FLASH_JSON="$3" SESSION_FOLDER="$4"
-    python3 - "${DB_FILE}" "${DOMINIO}" "${NOMBRE}" "${FLASH_JSON}" "${SESSION_FOLDER}" <<'PYEOF'
+    local DOMINIO="$1" NOMBRE="$2" REPORT_JSON="$3" SESSION_FOLDER="$4"
+    python3 - "${DB_FILE}" "${DOMINIO}" "${NOMBRE}" "${REPORT_JSON}" "${SESSION_FOLDER}" <<'PYEOF'
 import json, sys
 from pathlib import Path
 from datetime import datetime
@@ -161,20 +152,19 @@ nombre         = sys.argv[3]
 flash_json     = Path(sys.argv[4])
 session_folder = sys.argv[5]
 
-db = json.loads(db_path.read_text()) if db_path.exists() else {"version": 1, "prospectos": {}}
+db = json.loads(db_path.read_text()) if db_path.exists() else {"version": 1, "targets": {}}
 
-d = db["prospectos"].setdefault(dominio, {
-    "nombre": nombre,
-    "flash_fecha": None, "flash_pdf": None,
-    "diagnostico_pdf": None,
-    "flash_ciber_pdf": None, "diagnostico_ciber_pdf": None,
-    "trabajo_fecha": None, "trabajo_pdf": None,
-    "score_captacion": None,
-    "estado": "nuevo",
+d = db["targets"].setdefault(dominio, {
+    "name": nombre,
+    "report_at": None, "report_pdf": None,
+    "detailed_report_pdf": None,
+    "remediation_at": None, "remediation_pdf": None,
+    "skip_reason": "",
+    "status": "queued",
 })
 
-d["nombre"] = nombre
-d["flash_fecha"] = datetime.now().isoformat(timespec="seconds")
+d["name"] = nombre
+d["report_at"] = datetime.now().isoformat(timespec="seconds")
 
 sev_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
 try:
@@ -206,15 +196,13 @@ try:
         "session_folder": session_folder,
     }
     d["scan_data"] = scan
-    if scan["risk_score"] is not None:
-        d["score_captacion"] = scan["risk_score"]
 except Exception as e:
     # Si falla la extracción, al menos persiste session_folder
     d.setdefault("scan_data", {})["session_folder"] = session_folder
     print(f"[!] No se pudo extraer scan_data completo de {flash_json.name}: {e}")
 
-if d.get("estado") in (None, "nuevo"):
-    d["estado"] = "flash_listo"
+if d.get("status") in (None, "queued"):
+    d["status"] = "recon"
 
 db_path.parent.mkdir(parents=True, exist_ok=True)
 db_path.write_text(json.dumps(db, ensure_ascii=False, indent=2))
@@ -223,13 +211,13 @@ PYEOF
 }
 
 # =============================================================================
-# MODO 0: PROSPECTOS — scraping multi-fuente de PYMES chilenas
+# MODO 0: TARGETS — scraping multi-fuente de PYMES chilenas
 # =============================================================================
 # =============================================================================
 # MODO 0.5: ENRIQUECER — OpenClaw Orchestrator (Ollama + Crawl4AI)
 # =============================================================================
-cmd_prospectos_enriquecer() {
-    header "Fase 0.5 · Enriquecimiento de prospectos — OpenClaw"
+cmd_targets_enriquecer() {
+    header "Fase 0.5 · Enriquecimiento de targets — OpenClaw"
 
     local OPENCLAW_DIR="${SCRIPT_DIR}/openclaw"
     if [[ ! -f "${OPENCLAW_DIR}/run_batch.py" ]]; then
@@ -262,7 +250,7 @@ cmd_prospectos_enriquecer() {
     fi
     if [[ -z "${INPUT}" || ! -f "${INPUT}" ]]; then
         error "No se encontró un JSON de Google Places."
-        echo -e "  Uso: ${GRAY}./sins.sh prospectos enriquecer <ruta/google_places.json>${NC}"
+        echo -e "  Uso: ${GRAY}./sins.sh targets enriquecer <ruta/google_places.json>${NC}"
         exit 1
     fi
     INPUT="$(cd "$(dirname "${INPUT}")" && pwd)/$(basename "${INPUT}")"
@@ -270,7 +258,7 @@ cmd_prospectos_enriquecer() {
     mkdir -p "${REPORTES_DIR}"
     local TS OUT_NAME OUT_HOST
     TS="$(date +%Y%m%d_%H%M%S)"
-    OUT_NAME="prospectos_enriquecidos_${TS}.json"
+    OUT_NAME="targets_enriquecidos_${TS}.json"
     OUT_HOST="${REPORTES_DIR}/${OUT_NAME}"
 
     info "Entorno:  ${GRAY}${ENTORNO}${NC}"
@@ -307,7 +295,7 @@ cmd_prospectos_enriquecer() {
 
     echo ""
     if [[ -s "${OUT_HOST}" ]]; then
-        log "Prospectos enriquecidos en: ${GRAY}${OUT_HOST}${NC}"
+        log "Targets enriquecidos en: ${GRAY}${OUT_HOST}${NC}"
     else
         error "No se generó el archivo de salida."
         exit 1
@@ -315,10 +303,10 @@ cmd_prospectos_enriquecer() {
 }
 
 # =============================================================================
-# MODO 1: CAPTACIÓN — califica prospectos rápido (sin Docker)
+# MODO 1: RECON — califica targets rápido (sin Docker)
 # =============================================================================
-cmd_captacion() {
-    header "Fase 1 · Captación de prospectos"
+cmd_recon() {
+    header "Fase 1 · Recon de targets"
 
     # Verificar checkdmarc instalado
     if ! check_dep "checkdmarc" "pip install checkdmarc --break-system-packages"; then
@@ -326,12 +314,12 @@ cmd_captacion() {
     fi
     if ! check_dep "python3" ""; then exit 1; fi
 
-    mkdir -p "$(dirname "${PROSPECTOS_FILE}")"
+    mkdir -p "$(dirname "${TARGETS_FILE}")"
     mkdir -p "${REPORTES_DIR}"
 
     step "¿Cómo quieres ingresar los dominios?"
     echo "  1) Un solo dominio (escribirlo ahora)"
-    echo "  2) Lista desde archivo  [${PROSPECTOS_FILE}]"
+    echo "  2) Lista desde archivo  [${TARGETS_FILE}]"
     echo "  3) Escribir varios ahora (uno por línea, línea vacía para terminar)"
     echo ""
     ask "Opción [1/2/3]:"
@@ -347,12 +335,12 @@ cmd_captacion() {
             DOMINIOS=("$dom")
             ;;
         2)
-            if [[ ! -f "${PROSPECTOS_FILE}" ]]; then
-                error "No existe ${PROSPECTOS_FILE}"
+            if [[ ! -f "${TARGETS_FILE}" ]]; then
+                error "No existe ${TARGETS_FILE}"
                 info  "Crea el archivo con un dominio por línea y vuelve a correr."
                 exit 1
             fi
-            mapfile -t DOMINIOS < <(grep -v '^\s*#' "${PROSPECTOS_FILE}" | grep -v '^\s*$')
+            mapfile -t DOMINIOS < <(grep -v '^\s*#' "${TARGETS_FILE}" | grep -v '^\s*$')
             info "Se analizarán ${#DOMINIOS[@]} dominios desde el archivo."
             ;;
         3)
@@ -379,7 +367,7 @@ import json
 from pathlib import Path
 try:
     db = json.loads(Path("${DB_FILE}").read_text())
-    print("\n".join(db.get("prospectos", {}).keys()))
+    print("\n".join(db.get("targets", {}).keys()))
 except Exception:
     pass
 PYEOF
@@ -403,10 +391,10 @@ PYEOF
 
     # Archivo de resultados de sesión
     SESSION_DATE=$(date +"%Y%m%d_%H%M%S")
-    RESULTS_FILE="${REPORTES_DIR}/captacion_${SESSION_DATE}.txt"
-    CALIENTES_FILE="${REPORTES_DIR}/prospectos_calientes_${SESSION_DATE}.txt"
+    RESULTS_FILE="${REPORTES_DIR}/recon_${SESSION_DATE}.txt"
+    PRIORITY_FILE="${REPORTES_DIR}/recon_priority_${SESSION_DATE}.txt"
 
-    declare -a CALIENTES=()
+    declare -a PRIORITY=()
     declare -a TODOS=()
 
     for dominio in "${DOMINIOS[@]}"; do
@@ -453,66 +441,66 @@ else:
 
 score = min(score, 100)
 
-caliente = score >= 50
+priority = score >= 50
 print(f"SCORE:{score}")
-print(f"CALIENTE:{'SI' if caliente else 'NO'}")
+print(f"PRIORITY_HIT:{'SI' if priority else 'NO'}")
 print(f"ISSUES:{' | '.join(issues) if issues else 'Ninguno relevante'}")
 PYEOF
         )
 
         SCORE=$(echo "$RESULTADO" | grep "SCORE:" | cut -d: -f2)
-        CALIENTE=$(echo "$RESULTADO" | grep "CALIENTE:" | cut -d: -f2)
+        PRIORITY_HIT=$(echo "$RESULTADO" | grep "PRIORITY_HIT:" | cut -d: -f2)
         ISSUES=$(echo "$RESULTADO" | grep "ISSUES:" | cut -d: -f2-)
 
         # Mostrar resultado
         printf "  Puntaje:  "; score_color "${SCORE:-0}"
         echo -e "  Problemas: ${GRAY}${ISSUES}${NC}"
 
-        if [[ "$CALIENTE" == "SI" ]]; then
-            echo -e "  Estado:   ${BRED}● PROSPECTO CALIENTE — enviar informe flash${NC}"
-            CALIENTES+=("$dominio")
+        if [[ "$PRIORITY_HIT" == "SI" ]]; then
+            echo -e "  Estado:   ${BRED}● TARGET PRIORITARIO — enviar informe${NC}"
+            PRIORITY+=("$dominio")
         else
             echo -e "  Estado:   ${GREEN}● Descartado — buena configuración${NC}"
         fi
         echo ""
 
-        TODOS+=("${SCORE}|${CALIENTE}|${dominio}|${ISSUES}")
+        TODOS+=("${SCORE}|${PRIORITY_HIT}|${dominio}|${ISSUES}")
     done
 
     # ── RESUMEN ──────────────────────────────────────────────────────────────
     step "Resumen de sesión"
 
     echo -e "  Dominios analizados : ${WHITE}${#DOMINIOS[@]}${NC}"
-    echo -e "  Prospectos calientes: ${BRED}${#CALIENTES[@]}${NC}"
-    echo -e "  Descartados         : ${GREEN}$(( ${#DOMINIOS[@]} - ${#CALIENTES[@]} ))${NC}"
+    echo -e "  Targets prioritarios: ${BRED}${#PRIORITY[@]}${NC}"
+    echo -e "  Descartados         : ${GREEN}$(( ${#DOMINIOS[@]} - ${#PRIORITY[@]} ))${NC}"
     echo ""
 
     # Guardar resultados
     {
-        echo "# S.I.N.S. — Resultados de captación ${SESSION_DATE}"
-        echo "# Formato: SCORE | CALIENTE | DOMINIO | PROBLEMAS"
+        echo "# S.I.N.S. — Resultados de recon ${SESSION_DATE}"
+        echo "# Formato: SCORE | PRIORITY_HIT | DOMINIO | PROBLEMAS"
         for r in "${TODOS[@]}"; do echo "$r"; done
     } > "${RESULTS_FILE}"
 
-    if [[ ${#CALIENTES[@]} -gt 0 ]]; then
-        printf '%s\n' "${CALIENTES[@]}" > "${CALIENTES_FILE}"
-        echo -e "${BGREEN}Prospectos calientes guardados en:${NC}"
-        echo -e "  ${GRAY}${CALIENTES_FILE}${NC}"
+    if [[ ${#PRIORITY[@]} -gt 0 ]]; then
+        printf '%s\n' "${PRIORITY[@]}" > "${PRIORITY_FILE}"
+        echo -e "${BGREEN}Targets prioritarios guardados en:${NC}"
+        echo -e "  ${GRAY}${PRIORITY_FILE}${NC}"
         echo ""
 
-        ask "¿Generar informe flash ahora para el primer prospecto caliente? [s/N]"
+        ask "¿Generar informe ahora para el primer target prioritario? [s/N]"
         read -r resp
         if [[ "${resp,,}" == "s" ]]; then
-            PRIMER="${CALIENTES[0]}"
+            PRIMER="${PRIORITY[0]}"
             ask "Nombre del cliente para '${PRIMER}' (ej: Estudio Jurídico González):"
             read -r nombre_cliente
-            _run_flash "$PRIMER" "$nombre_cliente"
+            _run_report "$PRIMER" "$nombre_cliente"
         else
-            info "Cuando quieras el flash, ejecuta:"
-            echo -e "  ${GRAY}./sins.sh flash${NC}"
+            info "Cuando quieras el informe, ejecuta:"
+            echo -e "  ${GRAY}./sins.sh report${NC}"
         fi
     else
-        warn "Ningún prospecto caliente en esta sesión. Busca más dominios."
+        warn "Ningún target prioritario en esta sesión."
     fi
 
     echo ""
@@ -520,16 +508,16 @@ PYEOF
 }
 
 # =============================================================================
-# MODO 2: FLASH — informe flash completo con Docker
+# MODO 2: FLASH — informe completo con Docker
 # =============================================================================
-cmd_flash() {
-    header "Fase 1 · Informe Flash (con Docker)"
+cmd_report() {
+    header "Fase 1 · Informe (con Docker)"
 
     check_docker_running
     check_container_built
 
     # ── Flag --ciber: informes con marco Ley 21.663 (Ley Marco de Ciberseguridad) ─
-    # ./sins.sh flash --ciber dominio.cl  → 2 PDF orientados a proveedores de
+    # ./sins.sh report --ciber dominio.cl  → 2 PDF orientados a proveedores de
     # operadores de servicios esenciales (en vez del marco Ley 21.719 por defecto).
     local FRAMEWORK="datos"
     local -a _FARGS=()
@@ -542,29 +530,29 @@ cmd_flash() {
     set -- "${_FARGS[@]+"${_FARGS[@]}"}"
 
     # ── Modo directo (no-interactivo) ─────────────────────────────────────────
-    # ./sins.sh flash dominio.cl "Nombre Empresa"  → salta el menú de calientes
+    # ./sins.sh report dominio.cl "Nombre Empresa"  → salta el menú de prioritarios
     if [[ -n "${1:-}" ]]; then
-        _run_flash "$1" "${2:-$1}" "$FRAMEWORK"
+        _run_report "$1" "${2:-$1}" "$FRAMEWORK"
         return
     fi
 
     # ── INPUT ─────────────────────────────────────────────────────────────────
-    step "Datos del prospecto"
+    step "Datos del target"
 
-    # ¿Hay calientes del día?
-    LATEST_CALIENTES=$(ls -t "${REPORTES_DIR}"/prospectos_calientes_*.txt 2>/dev/null | head -1 || echo "")
+    # ¿Hay prioritarios del día?
+    LATEST_PRIORITY=$(ls -t "${REPORTES_DIR}"/recon_priority_*.txt 2>/dev/null | head -1 || echo "")
 
-    if [[ -n "$LATEST_CALIENTES" ]]; then
-        info "Prospectos calientes disponibles:"
-        # Excluir dominios ya procesados (estado flash_listo o descartado en DB)
-        mapfile -t LISTA < <(python3 - "$LATEST_CALIENTES" <<PYEOF
+    if [[ -n "$LATEST_PRIORITY" ]]; then
+        info "Targets prioritarios disponibles:"
+        # Excluir dominios ya procesados (cualquier status distinto de queued)
+        mapfile -t LISTA < <(python3 - "$LATEST_PRIORITY" <<PYEOF
 import json, sys
 from pathlib import Path
 excluidos = set()
 try:
     db = json.loads(Path("${DB_FILE}").read_text())
-    for dom, info in db.get("prospectos", {}).items():
-        if info.get("estado") in ("flash_listo", "descartado"):
+    for dom, info in db.get("targets", {}).items():
+        if info.get("status") not in (None, "queued"):
             excluidos.add(dom)
 except Exception:
     pass
@@ -592,7 +580,7 @@ PYEOF
             read -r DOMINIO
         fi
     else
-        ask "Dominio del prospecto (ej: estudiojuridico.cl):"
+        ask "Dominio del target (ej: estudiojuridico.cl):"
         read -r DOMINIO
     fi
 
@@ -609,10 +597,10 @@ PYEOF
     read -r confirm
     [[ "${confirm,,}" != "s" ]] && { warn "Cancelado."; exit 0; }
 
-    _run_flash "$DOMINIO" "$CLIENTE" "$FRAMEWORK"
+    _run_report "$DOMINIO" "$CLIENTE" "$FRAMEWORK"
 }
 
-_run_flash() {
+_run_report() {
     local DOMINIO="$1"
     local CLIENTE="$2"
     local FRAMEWORK="${3:-datos}"
@@ -622,21 +610,21 @@ _run_flash() {
 
     # ── Variantes según el marco legal del informe ───────────────────────────
     # datos → Ley 21.719 (Protección de Datos)  ·  ciber → Ley 21.663 (Ciberseguridad)
-    local FW_LABEL DB_FLASH_KEY DB_DIAG_KEY FLASH_BASE DIAG_BASE
-    local JSON_FLASH JSON_DIAG COMMIT_MSG
+    local FW_LABEL DB_REPORT_KEY DB_DETAIL_KEY REPORT_BASE DETAIL_BASE
+    local JSON_REPORT JSON_DETAIL COMMIT_MSG
     if [[ "${FRAMEWORK}" == "ciber" ]]; then
         FW_LABEL="Ley 21.663 — Ley Marco de Ciberseguridad"
-        DB_FLASH_KEY="flash_ciber_pdf";  DB_DIAG_KEY="diagnostico_ciber_pdf"
-        FLASH_BASE="SINS_Flash_Ciber";   DIAG_BASE="SINS_Diagnostico_Ciber"
-        JSON_FLASH="flash_ciber_${SAFE_DOM}.json"
-        JSON_DIAG="diagnostico_ciber_${SAFE_DOM}.json"
+        DB_REPORT_KEY="report_pdf";  DB_DETAIL_KEY="detailed_report_pdf"
+        REPORT_BASE="SINS_Flash_Ciber";   DETAIL_BASE="SINS_Diagnostico_Ciber"
+        JSON_REPORT="flash_ciber_${SAFE_DOM}.json"
+        JSON_DETAIL="diagnostico_ciber_${SAFE_DOM}.json"
         COMMIT_MSG="db: flash ciber ${DOMINIO}"
     else
         FW_LABEL="Ley 21.719 — Protección de Datos Personales"
-        DB_FLASH_KEY="flash_pdf";  DB_DIAG_KEY="diagnostico_pdf"
-        FLASH_BASE="SINS_Flash";   DIAG_BASE="SINS_Diagnostico"
-        JSON_FLASH="flash_${SAFE_DOM}.json"
-        JSON_DIAG="diagnostico_${SAFE_DOM}.json"
+        DB_REPORT_KEY="report_pdf";  DB_DETAIL_KEY="detailed_report_pdf"
+        REPORT_BASE="SINS_Flash";   DETAIL_BASE="SINS_Diagnostico"
+        JSON_REPORT="flash_${SAFE_DOM}.json"
+        JSON_DETAIL="diagnostico_${SAFE_DOM}.json"
         COMMIT_MSG="db: flash ${DOMINIO}"
     fi
 
@@ -677,28 +665,27 @@ _run_flash() {
     [[ -n "$DMARC_JSON" ]] && COMMON_ARGS+=("--dmarc" "${DMARC_JSON}")
     [[ -n "$TECH_JSON"  ]] && COMMON_ARGS+=("--tech"  "${TECH_JSON}")
 
-    # ── Flash JSON ────────────────────────────────────────────────────────────
-    # El PDF NO se genera aquí — se produce bajo demanda cuando el prospecto
-    # responde (scripts/enviar_flash.py lo arma desde este JSON).
-    step "Generando JSON Flash (${FW_LABEL})"
-    local FLASH_JSON="${AUDIT_DIR}/${JSON_FLASH}"
+    # ── Report JSON ───────────────────────────────────────────────────────────
+    # El PDF NO se genera aquí — scripts/generate_pdf.py lo arma desde este JSON.
+    step "Generando JSON del informe (${FW_LABEL})"
+    local REPORT_JSON="${AUDIT_DIR}/${JSON_REPORT}"
 
     python3 "${SCRIPT_DIR}/scripts/nuclei_to_report.py" "${COMMON_ARGS[@]}" \
         --report-type "flash" \
         --framework   "${FRAMEWORK}" \
-        --output "${FLASH_JSON}"
+        --output "${REPORT_JSON}"
 
     # ── Diagnóstico JSON ──────────────────────────────────────────────────────
     step "Generando JSON Diagnóstico (${FW_LABEL})"
-    local DIAG_JSON="${AUDIT_DIR}/${JSON_DIAG}"
+    local DETAIL_JSON="${AUDIT_DIR}/${JSON_DETAIL}"
 
     python3 "${SCRIPT_DIR}/scripts/nuclei_to_report.py" "${COMMON_ARGS[@]}" \
         --report-type "diagnostico" \
         --framework   "${FRAMEWORK}" \
-        --output "${DIAG_JSON}"
+        --output "${DETAIL_JSON}"
 
     # Registrar scan_data + session_folder en la DB (sin PDFs)
-    _db_update_scan "${DOMINIO}" "${CLIENTE}" "${FLASH_JSON}" "$(basename "${SESSION_DIR}")"
+    _db_update_scan "${DOMINIO}" "${CLIENTE}" "${REPORT_JSON}" "$(basename "${SESSION_DIR}")"
 
 
     # ── RESULTADO ─────────────────────────────────────────────────────────────
@@ -708,16 +695,15 @@ _run_flash() {
     echo -e "${RED}│${NC}  ${GRAY}${CLIENTE}${NC}"
     echo -e "${RED}│${NC}  ${GRAY}Marco: ${FW_LABEL}${NC}"
     echo -e "${RED}├─────────────────────────────────────────────────────────┤${NC}"
-    echo -e "${RED}│${NC}  Flash JSON      : ${GRAY}$(basename "${FLASH_JSON}")${NC}"
-    echo -e "${RED}│${NC}  Diagnóstico JSON: ${GRAY}$(basename "${DIAG_JSON}")${NC}"
+    echo -e "${RED}│${NC}  Report JSON     : ${GRAY}$(basename "${REPORT_JSON}")${NC}"
+    echo -e "${RED}│${NC}  Diagnóstico JSON: ${GRAY}$(basename "${DETAIL_JSON}")${NC}"
     echo -e "${RED}├─────────────────────────────────────────────────────────┤${NC}"
     echo -e "${RED}│${NC}  Dir: ${GRAY}${AUDIT_DIR}${NC}"
     echo -e "${RED}└─────────────────────────────────────────────────────────┘${NC}"
     echo ""
 
-    info "PDF se generará cuando el prospecto responda."
-    info "Desde la webapp: [ENVIAR FLASH] en DATA_ASSETS."
-    info "Desde la CLI:    python3 scripts/enviar_flash.py --dominio ${DOMINIO}"
+    info "Genera el PDF con:"
+    echo -e "  ${GRAY}python3 scripts/generate_pdf.py --input ${REPORT_JSON} --output informe.pdf${NC}"
 }
 
 # =============================================================================
@@ -741,7 +727,7 @@ cmd_diagnostico() {
 
     if [[ -z "$SESSION_DIR" ]] || [[ ! -d "$SESSION_DIR" ]]; then
         error "No se encontró sesión previa para '${DOMINIO}' en ${REPORTES_DIR}/"
-        info "Genera un escaneo primero con: ${GRAY}./sins.sh flash${NC}"
+        info "Genera un escaneo primero con: ${GRAY}./sins.sh report${NC}"
         exit 1
     fi
 
@@ -801,13 +787,13 @@ _regen_diagnostico() {
     DMARC_JSON=$(find  "${SESSION_DIR}" -name "checkdmarc_${DOMINIO}.json" 2>/dev/null | head -1 || echo "")
     TECH_JSON=$(find   "${SESSION_DIR}" -name "whatweb_${DOMINIO}.json"    2>/dev/null | head -1 || echo "")
 
-    local DIAG_JSON="${SESSION_DIR}/diagnostico_${SAFE_DOM}.json"
+    local DETAIL_JSON="${SESSION_DIR}/diagnostico_${SAFE_DOM}.json"
     local DIAG_PDF="${SESSION_DIR}/SINS_Diagnostico_${SAFE_DOM}_${TIMESTAMP}.pdf"
 
     step "Regenerando diagnóstico de impacto PDF (sin nuevo escaneo)"
 
     local -a ARGS=("--client" "${CLIENTE}" "--domain" "${DOMINIO}" \
-                   "--output" "${DIAG_JSON}" "--report-type" "diagnostico")
+                   "--output" "${DETAIL_JSON}" "--report-type" "diagnostico")
     if [[ -n "$NUCLEI_JSON" ]]; then
         ARGS+=("--input" "${NUCLEI_JSON}")
     else
@@ -819,13 +805,13 @@ _regen_diagnostico() {
 
     python3 "${SCRIPT_DIR}/scripts/nuclei_to_report.py" "${ARGS[@]}"
     python3 "${SCRIPT_DIR}/scripts/generate_pdf.py" \
-        --input  "${DIAG_JSON}" \
+        --input  "${DETAIL_JSON}" \
         --output "${DIAG_PDF}"
 
     RESUMEN=$(python3 - <<PYEOF
 import json
 try:
-    data = json.load(open('${DIAG_JSON}'))
+    data = json.load(open('${DETAIL_JSON}'))
     es = data.get('executive_summary', {})
     bi = data.get('business_impact', {})
     print(f"SCORE:{es.get('risk_score', 0)}")
@@ -959,7 +945,7 @@ _run_trabajo() {
         --output "${PDF_OUT}"
 
     local REL_TRABAJO="${DOMINIO}/$(basename "${PDF_OUT}")"
-    _db_update "${DOMINIO}" "${CLIENTE}" "trabajo_pdf" "${REL_TRABAJO}"
+    _db_update "${DOMINIO}" "${CLIENTE}" "remediation_pdf" "${REL_TRABAJO}"
 
     # Extraer resumen de hallazgos del JSON generado
     RESUMEN=$(python3 - <<PYEOF
@@ -1010,10 +996,10 @@ PYEOF
 }
 
 # =============================================================================
-# MODO BATCH — procesar lista de prospectos calientes en paralelo
+# MODO BATCH — procesar lista de targets prioritarios en paralelo
 # =============================================================================
 cmd_batch() {
-    header "Batch · Prospectos calientes en paralelo"
+    header "Batch · Targets prioritarios en paralelo"
 
     check_docker_running
     check_container_built
@@ -1032,15 +1018,15 @@ cmd_batch() {
 
     # ── Archivo de targets ────────────────────────────────────────────────────
     if [[ -z "$TARGET_FILE" ]]; then
-        TARGET_FILE=$(ls -t "${TARGETS_DIR}"/prospectos_calientes_*.txt 2>/dev/null | head -1 || true)
+        TARGET_FILE=$(ls -t "${TARGETS_DIR}"/recon_priority_*.txt 2>/dev/null | head -1 || true)
     fi
     if [[ -z "$TARGET_FILE" ]]; then
-        TARGET_FILE=$(ls -t "${REPORTES_DIR}"/prospectos_calientes_*.txt 2>/dev/null | head -1 || true)
+        TARGET_FILE=$(ls -t "${REPORTES_DIR}"/recon_priority_*.txt 2>/dev/null | head -1 || true)
     fi
 
     if [[ -z "$TARGET_FILE" ]] || [[ ! -f "$TARGET_FILE" ]]; then
-        error "No se encontró lista de prospectos calientes."
-        info "Genera una con: ${GRAY}./sins.sh captacion${NC}"
+        error "No se encontró lista de targets prioritarios."
+        info "Genera una con: ${GRAY}./sins.sh recon${NC}"
         info "O provee una ruta: ${GRAY}./sins.sh batch targets/mi_lista.txt${NC}"
         exit 1
     fi
@@ -1169,7 +1155,7 @@ cmd_batch() {
 
         # Lanzar job
         echo -e "${CYAN}[→ ${num}/${TOTAL}]${NC} ${WHITE}${dom}${NC} — iniciando..."
-        ( _run_flash "$dom" "$nombre" ) > "${BATCH_LOG_DIR}/${safe}.log" 2>&1 &
+        ( _run_report "$dom" "$nombre" ) > "${BATCH_LOG_DIR}/${safe}.log" 2>&1 &
         PIDS+=($!)
         PID_IDX+=($i)
     done
@@ -1221,20 +1207,20 @@ cmd_batch() {
 # =============================================================================
 cmd_help() {
     header "Ayuda"
-    echo -e "  ${WHITE}./sins.sh prospectos${NC}"
+    echo -e "  ${WHITE}./sins.sh targets${NC}"
     echo -e "  ${GRAY}Scraping multi-fuente de PYMES chilenas por categoría y ciudad.${NC}"
     echo -e "  ${GRAY}Fuentes: Páginas Amarillas + DuckDuckGo + Google Maps + Apollo.io${NC}"
-    echo -e "  ${GRAY}Analiza DMARC/SPF/TLS y guarda calientes en targets/.${NC}"
+    echo -e "  ${GRAY}Analiza DMARC/SPF/TLS y guarda los prioritarios en targets/.${NC}"
     echo ""
-    echo -e "  ${WHITE}./sins.sh prospectos enriquecer${NC}  ${GRAY}[ruta/google_places.json]${NC}"
+    echo -e "  ${WHITE}./sins.sh targets enriquecer${NC}  ${GRAY}[ruta/google_places.json]${NC}"
     echo -e "  ${GRAY}Enriquece un JSON de Google Places con OpenClaw (3 agentes Ollama).${NC}"
     echo -e "  ${GRAY}Devuelve {empresa, dominio, cargo_objetivo, email, mensaje, confianza}.${NC}"
     echo ""
-    echo -e "  ${WHITE}./sins.sh captacion${NC}"
-    echo -e "  ${GRAY}Califica prospectos con checkdmarc (sin Docker).${NC}"
+    echo -e "  ${WHITE}./sins.sh recon${NC}"
+    echo -e "  ${GRAY}Califica targets con checkdmarc (sin Docker).${NC}"
     echo -e "  ${GRAY}Identifica quién tiene DMARC/SPF mal configurado.${NC}"
     echo ""
-    echo -e "  ${WHITE}./sins.sh flash${NC}  ${GRAY}[--ciber] [dominio] [\"Nombre\"]${NC}"
+    echo -e "  ${WHITE}./sins.sh report${NC}  ${GRAY}[--ciber] [dominio] [\"Nombre\"]${NC}"
     echo -e "  ${GRAY}Genera Flash + Diagnóstico desde un escaneo Docker (~15 min).${NC}"
     echo -e "  ${GRAY}Produce SINS_Flash_*.pdf y SINS_Diagnostico_*.pdf en la misma sesión.${NC}"
     echo -e "  ${GRAY}--ciber: marco Ley 21.663 (Ciberseguridad) para proveedores de${NC}"
@@ -1249,13 +1235,13 @@ cmd_help() {
     echo -e "  ${GRAY}Requiere autorización firmada. Genera informe técnico PDF.${NC}"
     echo ""
     echo -e "  ${WHITE}./sins.sh batch${NC}  ${GRAY}[ruta/lista.txt]${NC}"
-    echo -e "  ${GRAY}Procesa la lista de prospectos calientes en paralelo (hasta 5 workers).${NC}"
+    echo -e "  ${GRAY}Procesa la lista de targets prioritarios en paralelo (hasta 5 workers).${NC}"
     echo -e "  ${GRAY}Lee el archivo más reciente de targets/ o acepta ruta como argumento.${NC}"
     echo -e "  ${GRAY}Genera Flash + Diagnóstico para cada dominio sin intervención manual.${NC}"
     echo ""
     echo -e "  ${WHITE}./sins.sh webapp${NC}"
     echo -e "  ${GRAY}Inicia la interfaz web Flask en http://0.0.0.0:5000${NC}"
-    echo -e "  ${GRAY}Gestiona prospectos, lanza comandos y ve el output en tiempo real.${NC}"
+    echo -e "  ${GRAY}Gestiona targets, lanza comandos y ve el output en tiempo real.${NC}"
     echo ""
     echo -e "  ${GRAY}Próximamente: ./sins.sh monitoreo${NC}"
     echo ""
@@ -1265,16 +1251,16 @@ cmd_help() {
 # ENTRADA PRINCIPAL
 # =============================================================================
 case "${1:-help}" in
-    prospectos)
+    targets)
         case "${2:-}" in
-            enriquecer) cmd_prospectos_enriquecer "${@:3}" ;;
+            enriquecer) cmd_targets_enriquecer "${@:3}" ;;
             *)
-                error "Subcomando desconocido: 'prospectos ${2:-}'"
-                echo -e "  Uso: ${GRAY}./sins.sh prospectos enriquecer [archivo]${NC}"
+                error "Subcomando desconocido: 'targets ${2:-}'"
+                echo -e "  Uso: ${GRAY}./sins.sh targets enriquecer [archivo]${NC}"
                 exit 1 ;;
         esac ;;
-    captacion)   cmd_captacion ;;
-    flash)       cmd_flash "${@:2}" ;;
+    recon)       cmd_recon ;;
+    report)      cmd_report "${@:2}" ;;
     diagnostico) cmd_diagnostico ;;
     trabajo)     cmd_trabajo ;;
     batch)       cmd_batch "${@:2}" ;;

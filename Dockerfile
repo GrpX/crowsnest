@@ -60,7 +60,7 @@ RUN pip install --upgrade pip && pip install \
     python-dotenv rich
 
 # 4b. OPENCLAW ORCHESTRATOR — cliente Ollama + Crawl4AI
-# Enriquecimiento de prospectos PYME con agentes Ollama locales.
+# Enriquecimiento de targets PYME con agentes Ollama locales.
 RUN pip install \
     ollama \
     crawl4ai \

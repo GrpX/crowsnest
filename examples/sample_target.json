@@ -1,0 +1,99 @@
+{
+  "_comentario": "Datos 100% ficticios. Ilustra el esquema de db/targets.json; ningun dominio, organizacion ni correo de este archivo corresponde a una entidad real.",
+  "version": 1,
+  "targets": {
+    "ejemplo.cl": {
+      "name": "ejemplo.cl",
+      "status": "reported",
+      "report_at": "2026-01-14T10:15:00",
+      "report_pdf": "reportes/ejemplo.cl/Crowsnest_Report_ejemplo_20260114.pdf",
+      "detailed_report_pdf": null,
+      "remediation_at": null,
+      "remediation_pdf": null,
+      "skip_reason": "",
+      "emails_found": [
+        "contacto@ejemplo.cl",
+        "soporte@ejemplo.cl"
+      ],
+      "emails_found_at": "2026-01-15",
+      "email_mx_valid": true,
+      "scan_data": {
+        "risk_score": 58,
+        "risk_level": "medio",
+        "total_findings": 11,
+        "high_findings": 2,
+        "medium_findings": 4,
+        "email_security_status": "SPF presente, DMARC ausente",
+        "key_recommendation": "Publicar registro DMARC en modo p=none y revisar cabeceras de seguridad HTTP.",
+        "session_folder": "ejemplo_cl_20260114_101500",
+        "top_findings": [
+          {
+            "id": "dmarc-missing",
+            "name": "Ausencia de registro DMARC",
+            "severity": "high",
+            "category": "email_security"
+          },
+          {
+            "id": "hsts-missing",
+            "name": "Cabecera Strict-Transport-Security no configurada",
+            "severity": "medium",
+            "category": "misconfiguration"
+          },
+          {
+            "id": "admin-panel-exposed",
+            "name": "Panel de administracion expuesto",
+            "severity": "medium",
+            "category": "exposure"
+          }
+        ]
+      }
+    },
+    "example.com": {
+      "name": "example.com",
+      "status": "enriched",
+      "report_at": null,
+      "report_pdf": null,
+      "detailed_report_pdf": null,
+      "remediation_at": null,
+      "remediation_pdf": null,
+      "skip_reason": "",
+      "emails_found": [
+        "hello@example.com"
+      ],
+      "emails_found_at": "2026-02-02",
+      "email_mx_valid": true,
+      "scan_data": {
+        "risk_score": 71,
+        "risk_level": "alto",
+        "total_findings": 17,
+        "high_findings": 4,
+        "medium_findings": 6,
+        "email_security_status": "Sin SPF ni DMARC",
+        "key_recommendation": "Configurar SPF y DMARC; actualizar el CMS a una version soportada.",
+        "session_folder": "example_com_20260201_143000",
+        "top_findings": [
+          {
+            "id": "cms-outdated",
+            "name": "CMS con version desactualizada y CVE conocido",
+            "severity": "high",
+            "category": "vulnerability"
+          }
+        ]
+      }
+    },
+    "example.net": {
+      "name": "example.net",
+      "status": "skipped",
+      "report_at": null,
+      "report_pdf": null,
+      "detailed_report_pdf": null,
+      "remediation_at": null,
+      "remediation_pdf": null,
+      "skip_reason": "sitio_sin_contenido",
+      "emails_found": [],
+      "emails_found_at": "",
+      "email_mx_valid": false,
+      "scan_data": {}
+    }
+  }
+}

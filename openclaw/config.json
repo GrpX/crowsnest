@@ -18,7 +18,7 @@
     "user_agent": "SINS-OpenClaw/1.0 (auditoria de superficie de ataque; +https://sinsspa.cl)"
   },
   "batch": {
-    "max_prospectos": 185,
+    "max_targets": 185,
     "confianza_minima": 0.35,
     "pausa_entre_prospectos_seg": 0.8
   },

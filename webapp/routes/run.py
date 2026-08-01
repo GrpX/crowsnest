@@ -11,7 +11,7 @@ from jobs import create_job
 bp = Blueprint("run", __name__)
 
 _VALID = {
-    "flash", "diagnostico", "trabajo", "batch",
+    "report", "diagnostico", "trabajo", "batch",
 }
 
 

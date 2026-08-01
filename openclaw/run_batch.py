@@ -2,7 +2,7 @@
 # =============================================================================
 # OpenClaw Orchestrator — S.I.N.S.
 # =============================================================================
-# Recibe un JSON de Google Places y devuelve prospectos PYME enriquecidos
+# Recibe un JSON de Google Places y devuelve targets PYME enriquecidos
 # mediante una cadena de 3 agentes Ollama:
 #
 #   orquestador  -> triage del negocio y angulo de abordaje
@@ -12,11 +12,11 @@
 # El scraping del sitio PYME usa Crawl4AI, con fallback a requests + BeautifulSoup.
 #
 # Salida: lista JSON de objetos
-#   {empresa, dominio, cargo_objetivo, email, mensaje, mensaje_status,
+#   {name, dominio, cargo_objetivo, email, mensaje, mensaje_status,
 #    confianza, flash_json_usado, hallazgos_usados}
 #
 # Uso:
-#   python3 run_batch.py --input google_places.json --output prospectos.json
+#   python3 run_batch.py --input targets/domains.txt --output enriched.json
 #   cat google_places.json | python3 run_batch.py
 # =============================================================================
 from __future__ import annotations
@@ -207,48 +207,25 @@ def print_preflight(report: dict, agentes: dict) -> None:
         log("Todos los modelos requeridos estan disponibles.")
 
 
-# ─── NORMALIZACION DE GOOGLE PLACES ─────────────────────────────────────────
-def _normalize_one(p: dict) -> dict:
-    """Aplana una entrada de Google Places (API legacy o v1)."""
-    nombre = p.get("empresa") or p.get("name")
-    dn = p.get("displayName")
-    if not nombre and dn:
-        nombre = dn.get("text") if isinstance(dn, dict) else dn
-    website = (p.get("website") or p.get("websiteUri") or p.get("url")
-               or p.get("dominio") or "")
-    direccion = (p.get("formatted_address") or p.get("formattedAddress")
-                 or p.get("vicinity") or p.get("direccion") or "")
-    telefono = (p.get("formatted_phone_number") or p.get("internationalPhoneNumber")
-                or p.get("nationalPhoneNumber") or p.get("telefono") or "")
-    tipos = p.get("types") or p.get("primaryType") or p.get("primaryTypeDisplayName") or ""
-    if isinstance(tipos, dict):
-        tipos = tipos.get("text", "")
-    if isinstance(tipos, list):
-        tipos = ", ".join(str(t) for t in tipos)
-    return {
-        "empresa": str(nombre or "").strip(),
-        "website": str(website or "").strip(),
-        "direccion": str(direccion or "").strip(),
-        "telefono": str(telefono or "").strip(),
-        "tipos": str(tipos or "").strip(),
-    }
+# ─── ENTRADA: LISTA DE DOMINIOS ─────────────────────────────────────────────
+def parse_target_list(texto: str) -> list:
+    """Lee una lista de dominios en texto plano: uno por linea, # para comentar.
 
-
-def normalize_places(data) -> list:
-    """Acepta un JSON de Google Places en varias formas y devuelve una lista plana."""
+    Devuelve la estructura interna que consume el pipeline. El nombre visible
+    del target es el dominio mismo; el enriquecimiento por LLM lo refina.
+    """
     items = []
-    if isinstance(data, list):
-        items = data
-    elif isinstance(data, dict):
-        for key in ("results", "places", "prospectos", "items", "data"):
-            if isinstance(data.get(key), list):
-                items = data[key]
-                break
-        else:
-            if any(k in data for k in ("name", "displayName", "empresa")):
-                items = [data]
-    salida = [_normalize_one(it) for it in items if isinstance(it, dict)]
-    return [s for s in salida if s["empresa"]]
+    vistos = set()
+    for raw in texto.splitlines():
+        linea = raw.split("#", 1)[0].strip()
+        if not linea:
+            continue
+        dominio = extract_domain(linea)
+        if not dominio or dominio in vistos:
+            continue
+        vistos.add(dominio)
+        items.append({"name": dominio, "website": dominio})
+    return items
 
 
 # ─── UTILIDADES DE DOMINIO / EMAIL ──────────────────────────────────────────
@@ -309,11 +286,11 @@ def _reconcile_email(desc_email: str, encontrados: list, texto: str) -> str:
 # Crawl4AI pierde los enlaces <a href="mailto:..."> al convertir el HTML a
 # markdown. Por eso los emails se sacan del HTML crudo (mailto: con
 # BeautifulSoup + regex) y se complementan con el texto. Luego se descartan los
-# emails de plataformas/herramientas y se priorizan los del dominio del prospecto.
+# emails de plataformas/herramientas y se priorizan los del dominio del target.
 STRICT_EMAIL_RE = re.compile(
     r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 
-# Dominios de plataformas, CDNs y librerias: nunca son el contacto del prospecto.
+# Dominios de plataformas, CDNs y librerias: nunca son el contacto del target.
 _JUNK_EMAIL_DOMAINS = {
     "example.com", "example.org", "example.net", "domain.com", "email.com",
     "yourdomain.com", "tudominio.com", "sentry.io", "wixpress.com",
@@ -358,7 +335,7 @@ def _is_junk_email(email: str) -> bool:
 
 
 def _is_domain_email(email: str, dominio: str) -> bool:
-    """True si el email pertenece al dominio del prospecto (o un subdominio)."""
+    """True si el email pertenece al dominio del target (o un subdominio)."""
     dom = _email_domain(email)
     return bool(dominio) and (dom == dominio or dom.endswith("." + dominio))
 
@@ -419,7 +396,7 @@ def extract_site_emails(html: str, texto: str, prospect_domain: str) -> list:
     Une los mailto: del HTML (que Crawl4AI pierde al pasar a markdown), los
     emails ofuscados por Cloudflare, el regex sobre el HTML crudo y el regex
     sobre el texto. Descarta emails de plataformas/herramientas y ordena:
-    primero los del dominio del prospecto, luego el resto (incluye
+    primero los del dominio del target, luego el resto (incluye
     gmail/personales, validos para PYMEs chilenas).
     """
     dominio = (prospect_domain or "").strip().lower()
@@ -668,16 +645,16 @@ class SiteScraper:
 
 
 # ─── PREFILTRO HTTP: DESCARTE DE DOMINIOS MUERTOS ───────────────────────────
-# Antes de gastar scraping + 3 agentes Ollama en un prospecto, una sola GET
+# Antes de gastar scraping + 3 agentes Ollama en un target, una sola GET
 # rapida descarta dominios caidos, parqueados o abandonados. Es sync (requests
 # lo es); enrich_one la corre en un executor para no bloquear el event loop.
 def check_domain_alive(url: str, cfg: dict) -> tuple[bool, str, str, bool]:
     """Prefiltro HTTP de un dominio.
 
-    Devuelve (pasa, razon_descarte, dominio_alternativo, necesita_js).
+    Devuelve (pasa, skip_reason, dominio_alternativo, necesita_js).
 
     - `pasa` es False si el dominio esta muerto/abandonado/insuficiente.
-    - `razon_descarte` queda en '' cuando el dominio pasa.
+    - `skip_reason` queda en '' cuando el dominio pasa.
     - `dominio_alternativo` es '' salvo que la peticion (con allow_redirects) haya
       aterrizado en otro dominio: en ese caso es el dominio destino (la PYME pudo
       migrar) y solo se calcula si cfg["detectar_migracion"] esta activo.
@@ -949,14 +926,11 @@ def run_orquestador(client: OllamaClient, cfg: dict, place: dict, *,
         migracion = (f"- dominio_original: {dominio_original}\n"
                      f"- dominio_alternativo: {dominio_alternativo}\n")
     user = (
-        "Datos del negocio (Google Places):\n"
-        f"- Nombre: {place['empresa']}\n"
+        "Datos del target:\n"
+        f"- Nombre: {place['name']}\n"
         f"- Sitio web: {place['website'] or '(no informado)'}\n"
-        f"- Direccion: {place['direccion'] or '(no informada)'}\n"
-        f"- Telefono: {place['telefono'] or '(no informado)'}\n"
-        f"- Tipos: {place['tipos'] or '(no informados)'}\n"
         f"{migracion}\n"
-        "Decide si es un prospecto PYME viable y define el angulo de abordaje."
+        "Evalua el target y define el angulo de analisis."
     )
     raw = client.chat(cfg["model"], cfg["system_prompt"], user,
                       temperature=cfg.get("temperature", 0.15),
@@ -964,7 +938,6 @@ def run_orquestador(client: OllamaClient, cfg: dict, place: dict, *,
     d = _extract_json(raw)
     return {
         "viable": bool(d.get("viable", True)),
-        "sector": str(d.get("sector", "")).strip(),
         "cargo_objetivo": str(d.get("cargo_objetivo") or d.get("cargo") or "").strip(),
         "prioridad": str(d.get("prioridad", "media")).strip().lower(),
         "angulo": str(d.get("angulo", "")).strip(),
@@ -977,9 +950,8 @@ def run_descubridor(client: OllamaClient, cfg: dict, place: dict, plan: dict,
         else "(no se pudo obtener contenido del sitio)"
     user = (
         "NEGOCIO\n"
-        f"- Nombre: {place['empresa']}\n"
+        f"- Nombre: {place['name']}\n"
         f"- Sitio web: {place['website'] or '(no informado)'}\n"
-        f"- Sector (orquestador): {plan.get('sector', '')}\n"
         f"- Cargo sugerido (orquestador): {plan.get('cargo_objetivo', '')}\n\n"
         "EMAILS ENCONTRADOS EN EL SITIO (usa SOLO uno de estos, no inventes "
         "ninguno; elige el mas apropiado para el decisor segun su cargo y el "
@@ -1157,7 +1129,7 @@ _EMAIL_SCORE_GENERICOS = (
     "contacto", "info", "admin", "hola", "ventas", "soporte",
     "webmaster", "no-reply", "noreply", "mail", "correo",
 )
-# Webmail publico: el email no es del dominio propio del prospecto.
+# Webmail publico: el email no es del dominio propio del target.
 _FREE_EMAIL_PROVIDERS = {
     "gmail.com", "googlemail.com", "hotmail.com", "hotmail.cl", "hotmail.es",
     "outlook.com", "outlook.cl", "outlook.es", "live.com", "live.cl",
@@ -1239,7 +1211,7 @@ def compute_confianza(dominio: str, email: str, metodo: str, cargo: str,
     return round(min(score, 1.0), 2)
 
 
-# ─── PIPELINE POR PROSPECTO ─────────────────────────────────────────────────
+# ─── PIPELINE POR TARGET ─────────────────────────────────────────────────
 def _safe(label: str, fn, fallback):
     try:
         return fn()
@@ -1252,7 +1224,7 @@ async def enrich_one(idx: int, total: int, place: dict, agentes: dict,
                      client: OllamaClient, scraper: SiteScraper,
                      batch_cfg: dict, full_config: dict, *,
                      sin_redactor: bool = False) -> dict:
-    empresa = place["empresa"] or "(sin nombre)"
+    empresa = place["name"] or "(sin nombre)"
     website = place["website"]
     migracion_detectada = False
     dominio_original = ""
@@ -1285,14 +1257,14 @@ async def enrich_one(idx: int, total: int, place: dict, agentes: dict,
         elif not vivo:
             warn(f"[{idx}/{total}] SKIP {empresa[:36]:<36} razón={razon}")
             return {
-                "empresa": empresa,
+                "name": empresa,
                 "dominio": extract_domain(website) or "",
                 "cargo_objetivo": "",
                 "email": "",
                 "mensaje": "",
                 "confianza": 0.0,
                 "descartado": True,
-                "razon_descarte": razon,
+                "skip_reason": razon,
             }
 
     # 1. Scraping del sitio PYME (Crawl4AI / requests)
@@ -1308,7 +1280,7 @@ async def enrich_one(idx: int, total: int, place: dict, agentes: dict,
                  lambda: run_orquestador(client, agentes["orquestador"], place,
                                          dominio_original=dominio_original,
                                          dominio_alternativo=dominio_alternativo),
-                 {"viable": True, "sector": "", "cargo_objetivo": "",
+                 {"viable": True, "cargo_objetivo": "",
                   "prioridad": "media", "angulo": ""})
 
     # 3. DESCUBRIDOR — extraccion de contacto
@@ -1334,7 +1306,7 @@ async def enrich_one(idx: int, total: int, place: dict, agentes: dict,
 
     # 3.5 HALLAZGOS REALES — Flash JSON del dominio (o fallback DMARC/SPF).
     flash_data, flash_json_usado = load_hallazgos(dominio)
-    tipo = (place.get("tipos") or "").split(",")[0].strip().lower()
+    tipo = ""
 
     # 4. REDACTOR — correo de prospeccion sobre el template fijo.
     # --sin-redactor: batches de solo enriquecimiento (descubre dominio/email/MX)
@@ -1354,7 +1326,7 @@ async def enrich_one(idx: int, total: int, place: dict, agentes: dict,
          f"dom={dominio or '-':<22} conf={confianza} msg={mensaje_status}")
 
     return {
-        "empresa": empresa,
+        "name": empresa,
         "dominio": dominio,
         "cargo_objetivo": cargo,
         "email": email,
@@ -1364,7 +1336,7 @@ async def enrich_one(idx: int, total: int, place: dict, agentes: dict,
         "confianza": confianza,
         "email_mx_valido": mx_valido,
         "email_mx_razon": mx_razon,
-        "email_score": eq_score,
+        "email_quality": eq_score,
         "flash_json_usado": flash_json_usado,
         "hallazgos_usados": flash_data["hallazgos"],
         "migracion_detectada": migracion_detectada,
@@ -1377,7 +1349,7 @@ async def run_batch(places: list, config: dict, client: OllamaClient, *,
                     sin_redactor: bool = False) -> list:
     agentes = config["agentes"]
     batch_cfg = config.get("batch", {})
-    pausa = float(batch_cfg.get("pausa_entre_prospectos_seg", 0))
+    pausa = float(batch_cfg.get("pausa_entre_targets_seg", 0))
     resultados = []
     async with SiteScraper(config.get("crawl4ai", {})) as scraper:
         for i, place in enumerate(places, 1):
@@ -1390,48 +1362,48 @@ async def run_batch(places: list, config: dict, client: OllamaClient, *,
     return resultados
 
 
-# ─── PERSISTENCIA EN db/prospectos.json ─────────────────────────────────────
+# ─── PERSISTENCIA EN db/targets.json ─────────────────────────────────────
 # Los emails que descubre el batch viven en el JSON de salida; aqui se escriben
-# tambien de vuelta a la base maestra db/prospectos.json para que no dependan de
+# tambien de vuelta a la base maestra db/targets.json para que no dependan de
 # un paso manual. Es best-effort: si la DB no esta (p.ej. dentro del contenedor,
 # donde db/ no se monta) se avisa y el batch continua sin abortar.
-def _resolve_prospectos_db() -> Path:
-    """Ruta de la base maestra de prospectos. OPENCLAW_PROSPECTOS_DB manda."""
-    env = os.environ.get("OPENCLAW_PROSPECTOS_DB")
+def _resolve_targets_db() -> Path:
+    """Ruta de la base maestra de targets. OPENCLAW_TARGETS_DB manda."""
+    env = os.environ.get("OPENCLAW_TARGETS_DB")
     if env:
         return Path(env)
-    return MODULE_DIR.parent / "db" / "prospectos.json"
+    return MODULE_DIR.parent / "db" / "targets.json"
 
 
-PROSPECTOS_DB = _resolve_prospectos_db()
+TARGETS_DB = _resolve_targets_db()
 
 
-def persist_emails_to_db(prospectos: list, db_path=None, *,
+def persist_emails_to_db(targets: list, db_path=None, *,
                          email_fecha: str | None = None,
                          backup: bool = True) -> dict:
-    """Escribe los emails encontrados de vuelta a db/prospectos.json.
+    """Escribe los emails encontrados de vuelta a db/targets.json.
 
-    Por cada prospecto con email no vacio busca su dominio como llave en
-    .prospectos y agrega/actualiza email_contacto, emails_encontrados y
+    Por cada target con email no vacio busca su dominio como llave en
+    .targets y agrega/actualiza email_contacto, emails_encontrados y
     email_fecha, preservando el resto del registro y la estructura
-    envoltorio ({prospectos, version}). Hace un backup
-    db/prospectos.json.backup_email_<timestamp> antes de tocar el archivo.
+    envoltorio ({targets, version}). Hace un backup
+    db/targets.json.backup_email_<timestamp> antes de tocar el archivo.
 
     Devuelve {actualizados, no_encontrados, db_path, ok}. Nunca lanza por
     causas operativas (DB ausente, estructura inesperada): avisa y devuelve
     ok=False para no tumbar el batch.
     """
-    db_path = Path(db_path) if db_path else PROSPECTOS_DB
+    db_path = Path(db_path) if db_path else TARGETS_DB
     base = {"actualizados": [], "no_encontrados": [], "db_path": str(db_path)}
     if not db_path.is_file():
-        warn(f"DB de prospectos no encontrada ({db_path}); no se persisten emails.")
+        warn(f"DB de targets no encontrada ({db_path}); no se persisten emails.")
         return {**base, "ok": False}
 
-    con_email = [p for p in prospectos if (p.get("email") or "").strip()]
-    descartados = [p for p in prospectos if p.get("descartado")]
-    migrados = [p for p in prospectos if p.get("migracion_detectada")]
+    con_email = [p for p in targets if (p.get("email") or "").strip()]
+    descartados = [p for p in targets if p.get("descartado")]
+    migrados = [p for p in targets if p.get("migracion_detectada")]
     if not con_email and not descartados and not migrados:
-        info("Ningun prospecto trae email, descarte ni migracion; nada que persistir.")
+        info("Ningun target trae email, descarte ni migracion; nada que persistir.")
         return {**base, "ok": True}
 
     try:
@@ -1440,9 +1412,9 @@ def persist_emails_to_db(prospectos: list, db_path=None, *,
         error(f"No se pudo leer la DB {db_path}: {e}; no se persisten emails.")
         return {**base, "ok": False}
 
-    registros = db.get("prospectos")
+    registros = db.get("targets")
     if not isinstance(registros, dict):
-        warn(f"Estructura inesperada en {db_path} (.prospectos no es objeto); "
+        warn(f"Estructura inesperada en {db_path} (.targets no es objeto); "
              "no se persiste.")
         return {**base, "ok": False}
 
@@ -1456,44 +1428,41 @@ def persist_emails_to_db(prospectos: list, db_path=None, *,
         info(f"Backup de la DB: {bak.name}")
 
     actualizados, no_encontrados, marcados_descarte, migraciones = [], [], [], []
-    for prospecto in prospectos:
-        dominio = (prospecto.get("dominio") or "").strip().lower()
+    for target in targets:
+        dominio = (target.get("dominio") or "").strip().lower()
         # Descartados por el prefiltro: marcar estado y saltar (no llevan email).
-        if prospecto.get("descartado"):
+        if target.get("descartado"):
             if dominio:                       # sin dominio no hay llave que tocar
-                razon = prospecto.get("razon_descarte", "")
+                razon = target.get("skip_reason", "")
                 entry = registros.setdefault(dominio, {})
                 # conexion_fallida/timeout son errores de red transitorios, no un
                 # dominio muerto: dejar como flash_listo (pendiente) para que el
                 # proximo batch lo reintente. Se anota el fallo y NO se toca el
                 # outreach (el envio sigue vigente si ya estaba).
                 if razon in ("conexion_fallida", "timeout"):
-                    entry["estado"] = "flash_listo"
-                    entry["prefiltro_fallo"] = razon
+                    entry["status"] = "queued"
+                    entry["skip_reason"] = razon
                 else:
-                    entry["estado"] = "descartado"
-                    entry["razon_descarte"] = razon
-                    entry.setdefault("outreach", {})["estado"] = "descartado"
+                    entry["status"] = "skipped"
+                    entry["skip_reason"] = razon
                     marcados_descarte.append((dominio, razon))
             continue
-        email = (prospecto.get("email") or "").strip()
+        email = (target.get("email") or "").strip()
         # Migracion: la entrada se mantiene bajo el dominio ORIGINAL (no romper
         # referencias); se anotan el dominio nuevo y el original, y el email del
         # nuevo sitio se guarda en esa misma entrada.
-        if prospecto.get("migracion_detectada"):
-            original = (prospecto.get("dominio_original") or "").strip().lower()
-            alt = (prospecto.get("dominio_alternativo") or dominio).strip().lower()
+        if target.get("migracion_detectada"):
+            original = (target.get("dominio_original") or "").strip().lower()
+            alt = (target.get("dominio_alternativo") or dominio).strip().lower()
             clave = original or dominio        # la entrada vive bajo el original
             if clave and clave in registros:
                 reg = registros[clave]
                 reg["dominio_alternativo"] = alt
                 reg["dominio_original"] = original
                 if email:
-                    reg["email_contacto"] = email
-                    reg["emails_encontrados"] = prospecto.get("emails_encontrados") or [email]
-                    reg["email_fecha"] = fecha
-                    reg["email_score"] = prospecto.get("email_score", 0)
-                    reg["email_mx_valido"] = prospecto.get("email_mx_valido", False)
+                    reg["emails_found"] = target.get("emails_encontrados") or [email]
+                    reg["emails_found_at"] = fecha
+                    reg["email_mx_valid"] = target.get("email_mx_valido", False)
                     actualizados.append((clave, email))
                 migraciones.append((original, alt))
             else:
@@ -1503,18 +1472,16 @@ def persist_emails_to_db(prospectos: list, db_path=None, *,
             continue
         if dominio and dominio in registros:
             reg = registros[dominio]
-            reg["email_contacto"] = email
-            reg["emails_encontrados"] = prospecto.get("emails_encontrados") or [email]
-            reg["email_fecha"] = fecha
-            reg["email_score"] = prospecto.get("email_score", 0)
-            reg["email_mx_valido"] = prospecto.get("email_mx_valido", False)
+            reg["emails_found"] = target.get("emails_encontrados") or [email]
+            reg["emails_found_at"] = fecha
+            reg["email_mx_valid"] = target.get("email_mx_valido", False)
             actualizados.append((dominio, email))
         else:
             no_encontrados.append((dominio or "(sin dominio)", email))
 
     db_path.write_text(json.dumps(db, ensure_ascii=False, indent=2) + "\n",
                        encoding="utf-8")
-    log(f"DB actualizada: {len(actualizados)} prospecto(s) con email persistido.")
+    log(f"DB actualizada: {len(actualizados)} target(s) con email persistido.")
     if marcados_descarte:
         info(f"{len(marcados_descarte)} dominio(s) marcados como descartados en la DB.")
     if migraciones:
@@ -1541,25 +1508,25 @@ def read_input(path: str | None) -> str:
         data = sys.stdin.read()
         if data.strip():
             return data
-    error("No se indico entrada. Usa --input <archivo.json> o pasa el JSON por stdin.")
+    error("No se indico entrada. Usa --input <dominios.txt> o pasa la lista por stdin.")
     sys.exit(1)
 
 
-def print_summary(prospectos: list, config: dict) -> None:
+def print_summary(targets: list, config: dict) -> None:
     # Recibe la lista COMPLETA (utiles + descartados) para poder contar ambos.
-    descartados = [p for p in prospectos if p.get("descartado")]
-    utiles = [p for p in prospectos if not p.get("descartado")]
+    descartados = [p for p in targets if p.get("descartado")]
+    utiles = [p for p in targets if not p.get("descartado")]
     cmin = config.get("batch", {}).get("confianza_minima", 0.0)
     altos = [p for p in utiles if p.get("confianza", 0.0) >= cmin]
     step("Resumen del enriquecimiento")
-    info(f"Prospectos procesados : {len(prospectos)}")
+    info(f"Targets procesados : {len(targets)}")
     info(f"Descartados prefiltro : {len(descartados)}")
-    info(f"Migraciones detectadas: {sum(1 for p in prospectos if p.get('migracion_detectada'))}")
+    info(f"Migraciones detectadas: {sum(1 for p in targets if p.get('migracion_detectada'))}")
     info(f"Confianza >= {cmin}      : {len(altos)}")
     info(f"Con dominio           : {sum(1 for p in utiles if p['dominio'])}")
     info(f"Con email             : {sum(1 for p in utiles if p['email'])}")
     info(f"Email MX válido       : {sum(1 for p in utiles if p.get('email_mx_valido'))}")
-    info(f"Email score promedio  : {round(sum(p.get('email_score', 0) for p in utiles if p.get('email')) / max(1, sum(1 for p in utiles if p.get('email'))), 1)}")
+    info(f"Email score promedio  : {round(sum(p.get('email_quality', 0) for p in utiles if p.get('email')) / max(1, sum(1 for p in utiles if p.get('email'))), 1)}")
     info(f"Con emails en sitio   : {sum(1 for p in utiles if p.get('emails_encontrados'))}")
     info(f"Con Flash JSON real   : {sum(1 for p in utiles if p.get('flash_json_usado'))}")
     estados = {}
@@ -1572,23 +1539,25 @@ def print_summary(prospectos: list, config: dict) -> None:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
-        description="OpenClaw Orchestrator - enriquece prospectos PYME de Google Places.")
-    ap.add_argument("input_pos", nargs="?", help="JSON de Google Places (posicional).")
-    ap.add_argument("-i", "--input", help="JSON de Google Places.")
+        description="OpenClaw Orchestrator - enriquece targets PYME de Google Places.")
+    ap.add_argument("input_pos", nargs="?",
+                    help="Lista de dominios objetivo, uno por linea (posicional).")
+    ap.add_argument("-i", "--input",
+                    help="Lista de dominios objetivo, uno por linea. '#' comenta.")
     ap.add_argument("-o", "--output", help="Archivo JSON de salida (si se omite, stdout).")
     ap.add_argument("-c", "--config", default=str(DEFAULT_CONFIG),
                     help="Ruta de config.json.")
     ap.add_argument("-n", "--limit", type=int, default=0,
-                    help="Procesar como maximo N prospectos.")
+                    help="Procesar como maximo N targets.")
     ap.add_argument("--skip-preflight", action="store_true",
                     help="Omitir la verificacion de modelos Ollama.")
     ap.add_argument("--db",
-                    help="Ruta de db/prospectos.json donde persistir los emails "
-                         "(por defecto <repo>/db/prospectos.json o "
-                         "OPENCLAW_PROSPECTOS_DB).")
+                    help="Ruta de db/targets.json donde persistir los emails "
+                         "(por defecto <repo>/db/targets.json o "
+                         "OPENCLAW_TARGETS_DB).")
     ap.add_argument("--no-db-sync", action="store_true",
                     help="No escribir los emails encontrados de vuelta a "
-                         "db/prospectos.json al terminar el batch.")
+                         "db/targets.json al terminar el batch.")
     ap.add_argument("--include-discarded", action="store_true",
                     help="Incluir en la salida los dominios descartados por el "
                          "prefiltro (por defecto solo se escriben los utiles).")
@@ -1614,40 +1583,34 @@ def main(argv=None) -> int:
             error("Preflight fallido. Aborta el batch (usa --skip-preflight para forzar).")
             return 2
 
-    # Leer y normalizar el JSON de Google Places.
-    try:
-        data = json.loads(read_input(args.input or args.input_pos))
-    except json.JSONDecodeError as e:
-        error(f"El archivo de entrada no es JSON valido: {e}")
-        return 1
-
-    places = normalize_places(data)
+    # Leer la lista de dominios objetivo (texto plano, uno por linea).
+    places = parse_target_list(read_input(args.input or args.input_pos))
     if not places:
-        error("No se encontraron negocios en el JSON de entrada.")
+        error("La lista de entrada no contiene dominios validos.")
         return 1
 
-    cap = int(config.get("batch", {}).get("max_prospectos", 60))
+    cap = int(config.get("batch", {}).get("max_targets", 60))
     if args.limit > 0:
         places = places[:args.limit]
     if len(places) > cap:
-        warn(f"Entrada con {len(places)} negocios; se limita a {cap} (batch.max_prospectos).")
+        warn(f"Entrada con {len(places)} dominios; se limita a {cap} (batch.max_targets).")
         places = places[:cap]
 
-    step(f"Enriqueciendo {len(places)} prospecto(s)")
+    step(f"Enriqueciendo {len(places)} target(s)")
     t0 = time.time()
-    prospectos = asyncio.run(run_batch(places, config, client,
+    targets = asyncio.run(run_batch(places, config, client,
                                        sin_redactor=args.sin_redactor))
 
-    descartados = [p for p in prospectos if p.get("descartado")]
-    utiles = [p for p in prospectos if not p.get("descartado")]
+    descartados = [p for p in targets if p.get("descartado")]
+    utiles = [p for p in targets if not p.get("descartado")]
 
     if descartados:
         step("Dominios descartados por prefiltro")
         for d in descartados:
-            warn(f"  {d['empresa'][:40]:<40} {d['razon_descarte']}")
+            warn(f"  {d['name'][:40]:<40} {d['skip_reason']}")
 
-    # La salida solo incluye prospectos utiles, salvo --include-discarded (debug).
-    salida_items = prospectos if args.include_discarded else utiles
+    # La salida solo incluye targets utiles, salvo --include-discarded (debug).
+    salida_items = targets if args.include_discarded else utiles
     salida_items.sort(key=lambda p: p.get("confianza", 0.0), reverse=True)
 
     salida = json.dumps(salida_items, ensure_ascii=False, indent=2)
@@ -1657,12 +1620,12 @@ def main(argv=None) -> int:
     else:
         print(salida)
 
-    print_summary(prospectos, config)
+    print_summary(targets, config)
 
     # Persistir los emails encontrados de vuelta a la base maestra (best-effort).
     if not args.no_db_sync:
-        step("Persistencia de emails en db/prospectos.json")
-        persist_emails_to_db(prospectos, args.db or None)
+        step("Persistencia de emails en db/targets.json")
+        persist_emails_to_db(targets, args.db or None)
 
     info(f"Tiempo total: {time.time() - t0:.1f}s")
     return 0

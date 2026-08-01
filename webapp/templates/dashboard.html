@@ -19,12 +19,12 @@
     <!-- ── SIDEBAR ─────────────────────────────────────────── -->
     <aside class="arsenal-sidebar">
 
-      <!-- [01] CAPTACIÓN -->
+      <!-- [01] RECON -->
       <div class="tool-group">
-        <h3>[01] CAPTACIÓN</h3>
+        <h3>[01] RECON</h3>
 
         <div class="cmd-item" data-form="form-enriquecer" onclick="toggleCmd('form-enriquecer')">
-          &gt; ENRIQUECER PROSPECTOS
+          &gt; ENRIQUECER TARGETS
         </div>
         <div class="cmd-form" id="form-enriquecer">
           <button class="cmd-execute" onclick="runCommand('batch', {}, this)">
@@ -38,17 +38,17 @@
       <div class="tool-group">
         <h3>[02] INFORMES</h3>
 
-        <div class="cmd-item" data-form="form-flash" onclick="toggleCmd('form-flash')">
-          &gt; FLASH
+        <div class="cmd-item" data-form="form-report" onclick="toggleCmd('form-report')">
+          &gt; REPORT
         </div>
-        <div class="cmd-form" id="form-flash">
-          <input class="cmd-input" id="flash-dominio" type="text" placeholder="dominio.cl">
-          <input class="cmd-input" id="flash-cliente" type="text" placeholder="Nombre cliente">
+        <div class="cmd-form" id="form-report">
+          <input class="cmd-input" id="report-dominio" type="text" placeholder="dominio.cl">
+          <input class="cmd-input" id="report-nombre" type="text" placeholder="Nombre del target">
           <label class="cmd-check">
-            <input type="checkbox" id="flash-ciber"> marco --ciber (Ley 21.663)
+            <input type="checkbox" id="report-ciber"> marco --ciber (Ley 21.663)
           </label>
-          <button class="cmd-execute" onclick="runFlash(this)">
-            EJECUTAR FLASH
+          <button class="cmd-execute" onclick="runReport(this)">
+            EJECUTAR REPORT
           </button>
         </div>
 
@@ -68,8 +68,8 @@
           &gt; TRABAJO
         </div>
         <div class="cmd-form" id="form-trabajo">
-          <input class="cmd-input" id="trabajo-dominio" type="text" placeholder="cliente.cl">
-          <input class="cmd-input" id="trabajo-cliente" type="text" placeholder="Empresa S.A.">
+          <input class="cmd-input" id="trabajo-dominio" type="text" placeholder="ejemplo.cl">
+          <input class="cmd-input" id="trabajo-cliente" type="text" placeholder="Nombre del target">
           <input class="cmd-input" id="trabajo-auth" type="text" placeholder="AUTH-2026-001">
           <button class="cmd-execute" onclick="runTrabajo(this)">
             EJECUTAR TRABAJO
@@ -116,10 +116,10 @@
         <input class="search-field" id="search" type="text" placeholder="QUERY_TARGET_DATABASE">
         <div class="tag-filters">
           <button class="tag active" data-filter="all" onclick="setFilter(this, 'all')">ALL</button>
-          <button class="tag" data-filter="pendiente" onclick="setFilter(this, 'pendiente')">PENDIENTE</button>
-          <button class="tag" data-filter="enviado" onclick="setFilter(this, 'enviado')">ENVIADO</button>
-          <button class="tag" data-filter="respondido" onclick="setFilter(this, 'respondido')">RESPONDIDO</button>
-          <button class="tag" data-filter="descartado" onclick="setFilter(this, 'descartado')">DESCARTADO</button>
+          <button class="tag" data-filter="queued" onclick="setFilter(this, 'queued')">QUEUED</button>
+          <button class="tag" data-filter="recon" onclick="setFilter(this, 'recon')">RECON</button>
+          <button class="tag" data-filter="enriched" onclick="setFilter(this, 'enriched')">ENRICHED</button>
+          <button class="tag" data-filter="reported" onclick="setFilter(this, 'reported')">REPORTED</button>
         </div>
         <span id="counter"></span>
       </div>
@@ -130,16 +130,15 @@
             <tr>
               <th>TARGET_DOMAIN</th>
               <th>IDENTIFIER</th>
-              <th>EMAIL</th>
               <th>STATUS</th>
-              <th>OUTREACH</th>
               <th>RISK_SCORE</th>
+              <th>FINDINGS</th>
               <th>DATA_ASSETS</th>
             </tr>
           </thead>
-          <tbody id="prospectos-body">
+          <tbody id="targets-body">
             <tr>
-              <td colspan="7" style="text-align:center;color:var(--text-dim);padding:24px">
+              <td colspan="6" style="text-align:center;color:var(--text-dim);padding:24px">
                 INITIALIZING...
               </td>
             </tr>

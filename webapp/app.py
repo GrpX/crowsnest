@@ -29,7 +29,7 @@ from flask import Flask, render_template
 from flask_login import login_required
 
 from auth import SECRET_KEY, auth_bp, get_password, init_auth
-from routes import files_bp, prospectos_bp, run_bp, stream_bp
+from routes import files_bp, run_bp, stream_bp, targets_bp
 
 app = Flask(__name__,
     template_folder=str(WEBAPP_DIR / "templates"),
@@ -39,7 +39,7 @@ app.secret_key = SECRET_KEY
 
 init_auth(app)
 app.register_blueprint(auth_bp)
-app.register_blueprint(prospectos_bp)
+app.register_blueprint(targets_bp)
 app.register_blueprint(run_bp)
 app.register_blueprint(stream_bp)
 app.register_blueprint(files_bp)

@@ -1,6 +1,6 @@
 'use strict';
 
-let allProspectos = [];
+let allTargets = [];
 let currentFilter = 'all';
 let searchQuery = '';
 let openFormId = null;
@@ -9,8 +9,8 @@ let jobHistory = [];
 // ── INIT ──────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
-  loadProspectos('all');
-  loadTargets();
+  loadTargets('all');
+  loadTargetFiles();
   loadSesiones();
   initSearch();
 });
@@ -36,100 +36,75 @@ function toggleCmd(id) {
 
 // ── PROSPECTOS TABLE ──────────────────────────────────────
 
-async function loadProspectos(filtro) {
+async function loadTargets(filtro) {
   if (filtro) currentFilter = filtro;
   try {
-    const res = await fetch('/api/prospectos');
-    allProspectos = await res.json();
+    const res = await fetch('/api/targets');
+    allTargets = await res.json();
     renderTable();
   } catch (e) {
-    console.error('loadProspectos', e);
+    console.error('loadTargets', e);
   }
-}
-
-const OUTREACH_ESTADOS = ['pendiente', 'enviado', 'respondido', 'descartado'];
-
-function outreachEstado(p) {
-  const e = (p.outreach_estado || '').toLowerCase();
-  return OUTREACH_ESTADOS.includes(e) ? e : 'pendiente';
 }
 
 function renderTable() {
   const q = searchQuery.toLowerCase();
-  const rows = allProspectos.filter(p => {
-    const est = outreachEstado(p);
-    const mf = currentFilter === 'all'
-      ? est !== 'descartado'
-      : est === currentFilter;
+  const rows = allTargets.filter(t => {
+    const mf = currentFilter === 'all' ? true : t.status === currentFilter;
     const ms = !q
-      || p.dominio.toLowerCase().includes(q)
-      || (p.nombre || '').toLowerCase().includes(q)
-      || (p.email_contacto || '').toLowerCase().includes(q);
+      || t.dominio.toLowerCase().includes(q)
+      || (t.name || '').toLowerCase().includes(q);
     return mf && ms;
   });
 
   const counter = document.getElementById('counter');
-  if (counter) counter.textContent = `${rows.length} / ${allProspectos.length}`;
+  if (counter) counter.textContent = `${rows.length} / ${allTargets.length}`;
 
-  const tbody = document.getElementById('prospectos-body');
+  const tbody = document.getElementById('targets-body');
   if (!tbody) return;
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:24px">NO_TARGETS_FOUND</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:24px">NO_TARGETS_FOUND</td></tr>';
     return;
   }
 
   tbody.innerHTML = rows.map(rowHtml).join('');
 }
 
-function outreachBadge(dominio, est) {
-  const opts = OUTREACH_ESTADOS.map(e =>
-    `<option value="${e}"${e === est ? ' selected' : ''}>${e.toUpperCase()}</option>`
-  ).join('');
-  return `<select class="outreach-badge ob-${est}"
-    onchange="patchOutreach('${esc(dominio)}', this.value, this)"
-    title="Cambiar estado de outreach">${opts}</select>`;
-}
-
-function riskCell(p) {
-  if (p.risk_score == null) return '<span style="color:var(--text-dim)">—</span>';
-  const lvl = (p.risk_level || '').toLowerCase();
+function riskCell(t) {
+  if (t.risk_score == null) return '<span style="color:var(--text-dim)">—</span>';
+  const lvl = (t.risk_level || '').toLowerCase();
   let cls = 'risk-none';
   if (lvl.includes('crít') || lvl.includes('crit')) cls = 'risk-critico';
   else if (lvl.includes('alto')) cls = 'risk-alto';
   else if (lvl.includes('medio')) cls = 'risk-medio';
-  return `<span class="risk ${cls}" title="${esc(p.risk_level || '')}">${esc(p.risk_score)}</span>`;
+  return `<span class="risk ${cls}" title="${esc(t.risk_level || '')}">${esc(t.risk_score)}</span>`;
 }
 
-function rowHtml(p) {
-  let badgeClass, badgeText;
-  if (p.trabajo_pdf)     { badgeClass = 'trabajo';    badgeText = 'TRABAJO'; }
-  else if (p.diagnostico_pdf) { badgeClass = 'diagnostico'; badgeText = 'DIAG'; }
-  else if (p.flash_pdf)  { badgeClass = 'flash';      badgeText = 'FLASH'; }
-  else                   { badgeClass = 'nuevo';      badgeText = 'NUEVO'; }
-
-  const badge = `<span class="badge ${badgeClass}">${badgeText}</span>`;
-  const email = p.email_contacto
-    ? `<a href="mailto:${esc(p.email_contacto)}" class="email-link">${esc(p.email_contacto)}</a>`
-    : '<span style="color:var(--text-dim)">—</span>';
-  const outreach = outreachBadge(p.dominio, outreachEstado(p));
-  const risk = riskCell(p);
+function rowHtml(t) {
+  const st = t.status || 'queued';
+  const badge = `<span class="badge st-${esc(st)}">${esc(st.toUpperCase())}</span>`;
+  const risk = riskCell(t);
 
   let assets = '';
-  if (p.flash_pdf)       assets += `<a href="/reportes/${encodeURI(p.flash_pdf)}" target="_blank">[VIEW_FLASH]</a>`;
-  if (p.diagnostico_pdf) assets += `<a href="/reportes/${encodeURI(p.diagnostico_pdf)}" target="_blank">[FULL_DIAG]</a>`;
-  if (p.trabajo_pdf)     assets += `<a href="/reportes/${encodeURI(p.trabajo_pdf)}" target="_blank">[TRABAJO]</a>`;
-  if (outreachEstado(p) === 'descartado')
-    assets += `<a href="#" class="restaurar-link" onclick="restaurarOutreach(event, '${esc(p.dominio)}')">[RESTAURAR]</a>`;
-  if (!assets)           assets = '<span style="color:var(--text-dim)">—</span>';
+  if (t.report_pdf)
+    assets += `<a href="/reportes/${encodeURI(t.report_pdf)}" target="_blank">[REPORT]</a>`;
+  if (t.detailed_report_pdf)
+    assets += `<a href="/reportes/${encodeURI(t.detailed_report_pdf)}" target="_blank">[DETAILED]</a>`;
+  if (t.remediation_pdf)
+    assets += `<a href="/reportes/${encodeURI(t.remediation_pdf)}" target="_blank">[REMEDIATION]</a>`;
+  if (!assets) assets = '<span style="color:var(--text-dim)">—</span>';
+
+  const findings = t.total_findings == null
+    ? '<span style="color:var(--text-dim)">—</span>'
+    : esc(t.total_findings);
 
   return `<tr>
-    <td class="domain-cell" onclick="fillDomain('${esc(p.dominio)}')" title="${esc(p.dominio)}">${esc(p.dominio)}</td>
-    <td>${esc(p.nombre || '—')}</td>
-    <td class="email-cell">${email}</td>
+    <td class="domain-cell" onclick="fillDomain('${esc(t.dominio)}')" title="${esc(t.dominio)}">${esc(t.dominio)}</td>
+    <td>${esc(t.name || '—')}</td>
     <td>${badge}</td>
-    <td class="outreach-cell">${outreach}</td>
     <td>${risk}</td>
+    <td>${findings}</td>
     <td class="action-links">${assets}</td>
   </tr>`;
 }
@@ -166,32 +141,6 @@ function fillDomain(dominio) {
   if (!form) return;
   const field = form.querySelector('input[type="text"]');
   if (field) field.value = dominio;
-}
-
-// ── OUTREACH ──────────────────────────────────────────────
-
-async function patchOutreach(dominio, estado, el) {
-  if (el) el.disabled = true;
-  try {
-    const res = await fetch(`/api/prospectos/${encodeURIComponent(dominio)}/outreach`, {
-      method: 'PATCH',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ estado }),
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const p = allProspectos.find(x => x.dominio === dominio);
-    if (p) p.outreach_estado = estado;
-    appendTerminal(`OUTREACH ${dominio} → ${estado.toUpperCase()}`);
-    renderTable();
-  } catch (e) {
-    appendTerminal(`[✗] No se pudo actualizar outreach de ${dominio}: ${e.message}`, 'error');
-    if (el) el.disabled = false;
-  }
-}
-
-function restaurarOutreach(ev, dominio) {
-  ev.preventDefault();
-  patchOutreach(dominio, 'pendiente', null);
 }
 
 // ── COMMAND RUNNERS ───────────────────────────────────────
@@ -238,7 +187,7 @@ async function runCommand(cmd, params, btn) {
       es.close();
       btn.disabled = false;
       btn.textContent = origText;
-      if (ok) setTimeout(() => loadProspectos(currentFilter), 1200);
+      if (ok) setTimeout(() => loadTargets(currentFilter), 1200);
     });
 
     es.onerror = () => {
@@ -256,12 +205,12 @@ async function runCommand(cmd, params, btn) {
   }
 }
 
-function runFlash(btn) {
-  const dominio = document.getElementById('flash-dominio')?.value.trim();
-  const cliente = document.getElementById('flash-cliente')?.value.trim();
-  const ciber = document.getElementById('flash-ciber')?.checked || false;
-  if (!dominio || !cliente) { alert('Dominio y cliente son requeridos'); return; }
-  runCommand('flash', { dominio, cliente, ciber }, btn);
+function runReport(btn) {
+  const dominio = document.getElementById('report-dominio')?.value.trim();
+  const nombre = document.getElementById('report-nombre')?.value.trim();
+  const ciber = document.getElementById('report-ciber')?.checked || false;
+  if (!dominio || !nombre) { alert('Dominio y nombre son requeridos'); return; }
+  runCommand('report', { dominio, nombre, ciber }, btn);
 }
 
 function runDiagnostico(btn) {
@@ -353,9 +302,9 @@ function renderJobHistory() {
 
 // ── DROPDOWNS ─────────────────────────────────────────────
 
-async function loadTargets() {
+async function loadTargetFiles() {
   try {
-    const res = await fetch('/api/targets');
+    const res = await fetch('/api/target-files');
     const files = await res.json();
     const sel = document.getElementById('sel-targets');
     if (!sel) return;
@@ -365,7 +314,7 @@ async function loadTargets() {
     }
     sel.innerHTML = files.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('');
   } catch (e) {
-    console.error('loadTargets', e);
+    console.error('loadTargetFiles', e);
   }
 }
 

@@ -9,7 +9,7 @@
 .env.*
 !.env.example
 
-# Datos reales de prospectos, objetivos y clientes — NUNCA en este repo
+# Datos reales de targets, objetivos y clientes — NUNCA en este repo
 db/
 targets/
 reportes/

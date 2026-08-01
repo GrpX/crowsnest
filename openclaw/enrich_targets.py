@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Enriquece db/prospectos.json con datos del flash JSON de cada prospecto.
+"""Enriquece db/targets.json con datos del flash JSON de cada target.
 
-Para cada prospecto con estado="flash_listo", busca la sesion de scan mas
+Para cada target con estado="flash_listo", busca la sesion de scan mas
 reciente en reportes/<dominio_con_guiones>_<fecha>/, lee el flash_*.json y
-agrega un bloque "scan_data" al prospecto. No toca los descartados.
+agrega un bloque "scan_data" al target. No toca los descartados.
 """
 import json
 import os
@@ -12,7 +12,7 @@ import sys
 from collections import Counter
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB = os.path.join(REPO, "db", "prospectos.json")
+DB = os.path.join(REPO, "db", "targets.json")
 REPORTES = os.path.join(REPO, "reportes")
 
 # Folder name: <dominio_con_guiones>_<YYYYMMDD>_<HHMMSS>
@@ -102,16 +102,16 @@ def main():
         db = json.load(fh)
 
     sessions = index_sessions()
-    prospectos = db["prospectos"]
+    targets = db["targets"]
 
     enriquecidos = []
     sin_sesion = []
     sin_flash = []
 
-    for dominio, p in prospectos.items():
+    for dominio, p in targets.items():
         if not isinstance(p, dict):
             continue
-        if p.get("estado") != "flash_listo":
+        if p.get("status") not in ("recon", "enriched"):
             continue
         if solo and dominio not in solo:
             continue
@@ -136,8 +136,7 @@ def main():
         scan = extract_scan_data(flash)
         scan["session_folder"] = os.path.basename(folder)
         p["scan_data"] = scan
-        if scan["risk_score"] is not None:
-            p["score_captacion"] = scan["risk_score"]
+        p["status"] = "enriched"
         enriquecidos.append((dominio, scan["risk_score"], scan["risk_level"]))
 
     with open(DB, "w", encoding="utf-8") as fh:
@@ -150,9 +149,9 @@ def main():
 
     # ---- Reporte ----
     print("=" * 60)
-    print("ENRIQUECIMIENTO DE PROSPECTOS — REPORTE")
+    print("ENRIQUECIMIENTO DE TARGETS — REPORTE")
     print("=" * 60)
-    print(f"Total prospectos enriquecidos : {len(enriquecidos)}")
+    print(f"Total targets enriquecidos : {len(enriquecidos)}")
     print(f"Sin sesion en reportes/        : {len(sin_sesion)}")
     if sin_flash:
         print(f"Con carpeta pero sin flash JSON: {len(sin_flash)}")
@@ -167,9 +166,9 @@ def main():
 
     ranked = sorted(enriquecidos, key=lambda x: (x[1] is None, -(x[1] or 0)))
     if solo:
-        print("\nProspectos enriquecidos por risk_score:")
+        print("\nTargets enriquecidos por risk_score:")
     else:
-        print("\nTop 5 prospectos por risk_score:")
+        print("\nTop 5 targets por risk_score:")
         ranked = ranked[:5]
     for dom, score, lvl in ranked:
         print(f"  {score:>4}  {lvl:6}  {dom}")

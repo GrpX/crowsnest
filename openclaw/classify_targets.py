@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # =============================================================================
-# Clasificador de prospectos — S.I.N.S.
+# Clasificador de targets — S.I.N.S.
 # =============================================================================
-# Separa los prospectos de db/prospectos.json en PYMEs reales (target SINS) y
+# Separa los targets de db/targets.json en PYMEs reales (target SINS) y
 # ruido (directorios, agregadores, SaaS de agendamiento/formularios).
 #
 # Por cada dominio:
@@ -16,7 +16,7 @@
 #   SAAS_TECNICO   plataforma tecnica generica (agendamiento, formularios)
 #   INDETERMINADO  dudoso, requiere revision humana
 #
-# Salida: db/prospectos_clasificados.json (NO modifica db/prospectos.json).
+# Salida: db/targets_clasificados.json (NO modifica db/targets.json).
 #
 # Uso:
 #   python3 openclaw/classify_prospects.py
@@ -46,8 +46,8 @@ from run_batch import (                                 # noqa: E402
     log, info, warn, error, step, BG, CY, YL, BR, W, NC,
 )
 
-DEFAULT_INPUT = REPO_ROOT / "db" / "prospectos.json"
-DEFAULT_OUTPUT = REPO_ROOT / "db" / "prospectos_clasificados.json"
+DEFAULT_INPUT = REPO_ROOT / "db" / "targets.json"
+DEFAULT_OUTPUT = REPO_ROOT / "db" / "targets_clasificados.json"
 DEFAULT_CONFIG = MODULE_DIR / "config.json"
 
 MODEL = "qwen2.5:7b"
@@ -257,12 +257,12 @@ def _clasificar_llm(client: ClasificadorOllama, dominio: str, nombre: str,
     return cat, conf, razon
 
 
-# ─── PIPELINE POR PROSPECTO ─────────────────────────────────────────────────
+# ─── PIPELINE POR TARGET ─────────────────────────────────────────────────
 async def clasificar_uno(dominio: str, datos: dict, scraper: SiteScraper,
                          client: ClasificadorOllama,
                          sem: asyncio.Semaphore) -> dict:
-    """Clasifica un prospecto y devuelve la entrada final (datos + clasificacion)."""
-    nombre = (datos.get("nombre") or dominio).strip()
+    """Clasifica un target y devuelve la entrada final (datos + clasificacion)."""
+    nombre = (datos.get("name") or dominio).strip()
     try:
         pista = heuristica(dominio)
         if pista["short_circuit"]:
@@ -354,7 +354,7 @@ def reporte(resultados: dict, segundos: float) -> None:
         conteo[e["clasificacion"]] = conteo.get(e["clasificacion"], 0) + 1
 
     step("Distribucion por categoria")
-    info(f"Prospectos clasificados : {total}")
+    info(f"Targets clasificados : {total}")
     info(f"Tiempo total            : {segundos:.0f}s")
     for c in CATEGORIAS:
         n = conteo[c]
@@ -368,16 +368,16 @@ def reporte(resultados: dict, segundos: float) -> None:
         key=lambda x: (-x[1]["confianza_clasificacion"], x[0]))
     step("Top 10 PYME_REAL — candidatos piloto")
     if not pymes:
-        warn("  Ningun prospecto se clasifico como PYME_REAL.")
+        warn("  Ningun target se clasifico como PYME_REAL.")
     for d, e in pymes[:10]:
-        log(f"  {e['confianza_clasificacion']:.2f}  {d:<34} {e.get('nombre', '')}")
+        log(f"  {e['confianza_clasificacion']:.2f}  {d:<34} {e.get('name', '')}")
         print(f"          {e['razon_clasificacion']}", file=sys.stderr)
 
     indet = sorted(d for d, e in resultados.items()
                    if e["clasificacion"] == "INDETERMINADO")
     step(f"INDETERMINADO — revision humana ({len(indet)})")
     if not indet:
-        log("  Ninguno: no hay prospectos que requieran revision humana.")
+        log("  Ninguno: no hay targets que requieran revision humana.")
     for d in indet:
         e = resultados[d]
         warn(f"  {d:<34} conf={e['confianza_clasificacion']:.2f}  "
@@ -399,17 +399,17 @@ def cargar_config(path: str) -> dict:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
-        description="Clasifica los prospectos de S.I.N.S. (PYME real vs. ruido).")
+        description="Clasifica los targets de S.I.N.S. (PYME real vs. ruido).")
     ap.add_argument("-i", "--input", default=str(DEFAULT_INPUT),
-                    help="db/prospectos.json (solo lectura).")
+                    help="db/targets.json (solo lectura).")
     ap.add_argument("-o", "--output", default=str(DEFAULT_OUTPUT),
                     help="JSON de salida con la clasificacion.")
     ap.add_argument("-c", "--config", default=str(DEFAULT_CONFIG),
                     help="Ruta de config.json (host Ollama, ajustes Crawl4AI).")
     ap.add_argument("-n", "--limit", type=int, default=0,
-                    help="Procesar como maximo N prospectos (0 = todos).")
+                    help="Procesar como maximo N targets (0 = todos).")
     ap.add_argument("-w", "--workers", type=int, default=3,
-                    help="Maximo de prospectos en paralelo (default 3).")
+                    help="Maximo de targets en paralelo (default 3).")
     ap.add_argument("--skip-preflight", action="store_true",
                     help="Omitir la verificacion del modelo Ollama.")
     args = ap.parse_args(argv)
@@ -417,7 +417,7 @@ def main(argv=None) -> int:
     input_path = Path(args.input).resolve()
     output_path = Path(args.output).resolve()
     if output_path == input_path:
-        error("El archivo de salida no puede ser el de entrada (prospectos.json).")
+        error("El archivo de salida no puede ser el de entrada (targets.json).")
         return 1
     if not input_path.is_file():
         error(f"No existe el archivo de entrada: {input_path}")
@@ -426,11 +426,11 @@ def main(argv=None) -> int:
     try:
         data = json.loads(input_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
-        error(f"prospectos.json no es JSON valido: {e}")
+        error(f"targets.json no es JSON valido: {e}")
         return 1
-    prospectos = data.get("prospectos") if isinstance(data, dict) else None
-    if not isinstance(prospectos, dict) or not prospectos:
-        error("prospectos.json no contiene la clave 'prospectos' con datos.")
+    targets = data.get("targets") if isinstance(data, dict) else None
+    if not isinstance(targets, dict) or not targets:
+        error("targets.json no contiene la clave 'targets' con datos.")
         return 1
 
     config = cargar_config(args.config)
@@ -441,7 +441,7 @@ def main(argv=None) -> int:
             error("Preflight fallido. Aborta (usa --skip-preflight para forzar).")
             return 2
 
-    items = list(prospectos.items())
+    items = list(targets.items())
     if args.limit > 0:
         items = items[:args.limit]
     workers = max(1, args.workers)
@@ -450,20 +450,20 @@ def main(argv=None) -> int:
     scraper_cfg["max_chars"] = HTML_MAX_CHARS             # excerpt pedido: 5000
     scraper_cfg.setdefault("enabled", True)
 
-    step(f"Clasificando {len(items)} prospecto(s) — {workers} workers")
-    est_min = len(items) * 8 / workers / 60               # ~8 s/prospecto efectivos
+    step(f"Clasificando {len(items)} target(s) — {workers} workers")
+    est_min = len(items) * 8 / workers / 60               # ~8 s/target efectivos
     info(f"Tiempo estimado: ~{est_min:.0f}-{est_min * 2.5:.0f} min "
-         f"(5-15 s por prospecto)")
+         f"(5-15 s por target)")
     info(f"Salida: {output_path}")
 
     t0 = time.time()
     resultados = asyncio.run(
         run_batch(items, scraper_cfg, client, workers, output_path))
 
-    # Reordena segun el orden original de prospectos.json antes de guardar.
+    # Reordena segun el orden original de targets.json antes de guardar.
     ordenado = {d: resultados[d] for d, _ in items if d in resultados}
     _guardar(output_path, ordenado)
-    log(f"Escrito: {output_path} ({len(ordenado)} prospectos)")
+    log(f"Escrito: {output_path} ({len(ordenado)} targets)")
 
     reporte(ordenado, time.time() - t0)
     return 0
