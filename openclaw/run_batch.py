@@ -6,13 +6,13 @@
 # mediante una cadena de 3 agentes LLM:
 #
 #   orquestador  -> triage del negocio y angulo de abordaje
-#   descubridor  -> extrae dominio, email y cargo objetivo desde el sitio web
+#   descubridor  -> extrae dominio y correos publicados en el sitio web
 #   summarizer   -> redacta el resumen ejecutivo del informe (en ingles)
 #
 # El scraping del sitio usa Crawl4AI, con fallback a requests + BeautifulSoup.
 #
 # Salida: lista JSON de objetos
-#   {name, dominio, cargo_objetivo, email, summary, summary_status,
+#   {name, dominio, email, summary, summary_status,
 #    confianza, flash_json_usado, hallazgos_usados}
 #
 # Uso:
@@ -484,7 +484,7 @@ def _crawl_text(result) -> str:
 
 
 # ─── SUBPAGINAS: enlaces a /contacto, /equipo, /nosotros... ──────────────────
-# El email del decisor suele vivir en una subpagina, no en la home. Estos slugs
+# El correo de contacto suele vivir en una subpagina, no en la home. Estos slugs
 # (en orden de prioridad) son las paginas tipicas donde aparece.
 _SUBPAGE_SLUGS = [
     "contacto", "contact", "equipo", "team", "nosotros", "about",
@@ -978,7 +978,6 @@ def run_orquestador(client: OllamaClient, cfg: dict, place: dict, *,
     d = _extract_json(raw)
     return {
         "viable": bool(d.get("viable", True)),
-        "cargo_objetivo": str(d.get("cargo_objetivo") or d.get("cargo") or "").strip(),
         "prioridad": str(d.get("prioridad", "media")).strip().lower(),
         "angulo": str(d.get("angulo", "")).strip(),
     }
@@ -992,10 +991,9 @@ def run_descubridor(client: OllamaClient, cfg: dict, place: dict, plan: dict,
         "NEGOCIO\n"
         f"- Nombre: {place['name']}\n"
         f"- Sitio web: {place['website'] or '(no informado)'}\n"
-        f"- Cargo sugerido (orquestador): {plan.get('cargo_objetivo', '')}\n\n"
+
         "EMAILS ENCONTRADOS EN EL SITIO (usa SOLO uno de estos, no inventes "
-        "ninguno; elige el mas apropiado para el decisor segun su cargo y el "
-        "contexto del negocio):\n"
+        "ninguno):\n"
         f"{', '.join(emails_encontrados) or '(ninguno)'}\n\n"
         f"CONTENIDO DEL SITIO WEB:\n{bloque}\n\n"
         "Extrae la informacion de contacto en JSON."
@@ -1010,8 +1008,7 @@ def run_descubridor(client: OllamaClient, cfg: dict, place: dict, plan: dict,
     return {
         "dominio": str(d.get("dominio", "")).strip().lower(),
         "email": str(d.get("email", "")).strip().lower(),
-        "cargo_objetivo": str(d.get("cargo_objetivo") or d.get("cargo") or "").strip(),
-        "nombre_contacto": str(d.get("nombre_contacto", "")).strip(),
+
         "resumen_empresa": str(d.get("resumen_empresa", "")).strip(),
         "senales": [str(s).strip() for s in senales if str(s).strip()][:6],
     }
@@ -1104,7 +1101,7 @@ def summarize_con_verificacion(client: OllamaClient, cfg: dict, dominio: str,
 
 
 # ─── VALIDACION MX + SCORE DE CALIDAD DEL EMAIL ─────────────────────────────
-# Locales genericos que NO identifican a un decisor (penalizan el score).
+# Locales genericos de buzon compartido (penalizan el score de calidad).
 _EMAIL_SCORE_GENERICOS = (
     "contacto", "info", "admin", "hola", "ventas", "soporte",
     "webmaster", "no-reply", "noreply", "mail", "correo",
@@ -1170,22 +1167,23 @@ def email_quality_score(email: str, mx_valido: bool) -> int:
 
 
 # ─── CONFIANZA ──────────────────────────────────────────────────────────────
-_CARGO_GENERICO = {"", "desconocido", "contacto", "responsable del negocio", "n/a"}
-
-
-def compute_confianza(dominio: str, email: str, metodo: str, cargo: str,
+def compute_confianza(dominio: str, email: str, metodo: str,
                       viable: bool, eq_score: int = 0) -> float:
-    """Confianza objetiva del enriquecimiento (0.0 - 1.0), por senales concretas."""
+    """Confianza objetiva del enriquecimiento (0.0 - 1.0), por senales concretas.
+
+    Todas las senales son tecnicas: dominio resuelto, metodo de scraping y
+    calidad del correo hallado. El peso que antes tenia el cargo del decisor
+    se redistribuyo al scraping y al correo — era una senal de calificacion
+    comercial, no de reconocimiento.
+    """
     score = 0.0
     if dominio:
         score += 0.30
     if metodo == "crawl4ai":
-        score += 0.25
+        score += 0.35
     elif metodo == "requests":
-        score += 0.15
-    score += round((eq_score / 100) * 0.25, 4)
-    if cargo and cargo.strip().lower() not in _CARGO_GENERICO:
         score += 0.20
+    score += round((eq_score / 100) * 0.35, 4)
     if not viable:
         score *= 0.5
     return round(min(score, 1.0), 2)
@@ -1239,7 +1237,6 @@ async def enrich_one(idx: int, total: int, place: dict, agentes: dict,
             return {
                 "name": empresa,
                 "dominio": extract_domain(website) or "",
-                "cargo_objetivo": "",
                 "email": "",
                 "summary": None,
                 "confianza": 0.0,
@@ -1260,20 +1257,16 @@ async def enrich_one(idx: int, total: int, place: dict, agentes: dict,
                  lambda: run_orquestador(client, agentes["orquestador"], place,
                                          dominio_original=dominio_original,
                                          dominio_alternativo=dominio_alternativo),
-                 {"viable": True, "cargo_objetivo": "",
-                  "prioridad": "media", "angulo": ""})
+                 {"viable": True, "prioridad": "media", "angulo": ""})
 
     # 3. DESCUBRIDOR — extraccion de contacto
     desc = _safe("descubridor",
                  lambda: run_descubridor(client, agentes["descubridor"], place,
                                          plan, sitio_texto, emails_encontrados),
-                 {"dominio": "", "email": "", "cargo_objetivo": "",
-                  "nombre_contacto": "", "resumen_empresa": "", "senales": []})
+                 {"dominio": "", "email": "", "resumen_empresa": "", "senales": []})
 
     dominio = extract_domain(website) or _clean_domain(desc["dominio"])
     email = _reconcile_email(desc["email"], emails_encontrados, sitio_texto)
-    cargo = (desc["cargo_objetivo"] or plan["cargo_objetivo"]
-             or "Responsable del negocio")
 
     # 3.6 VALIDACION MX + SCORE DE CALIDAD DEL EMAIL (DNS, sin SMTP).
     if email:
@@ -1296,7 +1289,7 @@ async def enrich_one(idx: int, total: int, place: dict, agentes: dict,
         summary, summary_status = summarize_con_verificacion(
             client, agentes["summarizer"], dominio, flash_data)
 
-    confianza = compute_confianza(dominio, email, metodo, cargo,
+    confianza = compute_confianza(dominio, email, metodo,
                                   plan.get("viable", True), eq_score)
 
     marca = (f"{BG}OK{NC}" if confianza >= batch_cfg.get("confianza_minima", 0.35)
@@ -1307,7 +1300,6 @@ async def enrich_one(idx: int, total: int, place: dict, agentes: dict,
     return {
         "name": empresa,
         "dominio": dominio,
-        "cargo_objetivo": cargo,
         "email": email,
         "emails_encontrados": emails_encontrados,
         "summary": summary,
@@ -1414,10 +1406,9 @@ def persist_emails_to_db(targets: list, db_path=None, *,
             if dominio:                       # sin dominio no hay llave que tocar
                 razon = target.get("skip_reason", "")
                 entry = registros.setdefault(dominio, {})
-                # conexion_fallida/timeout son errores de red transitorios, no un
-                # dominio muerto: dejar como flash_listo (pendiente) para que el
-                # proximo batch lo reintente. Se anota el fallo y NO se toca el
-                # outreach (el envio sigue vigente si ya estaba).
+                # conexion_fallida/timeout son errores de red transitorios, no
+                # un dominio muerto: se deja en queued para que el proximo
+                # batch lo reintente, anotando el motivo en skip_reason.
                 if razon in ("conexion_fallida", "timeout"):
                     entry["status"] = QUEUED
                     entry["skip_reason"] = razon
