@@ -62,7 +62,7 @@ def login():
         if request.form.get("password", "") == get_password():
             login_user(_user, remember=True)
             return redirect(url_for("dashboard"))
-        flash("Contraseña incorrecta")
+        flash("Incorrect password")
     return render_template("login.html")
 
 

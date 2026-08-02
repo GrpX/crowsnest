@@ -13,9 +13,9 @@ dominio = sys.argv[1] if len(sys.argv) > 1 else ""
 nombre = sys.argv[2] if len(sys.argv) > 2 else ""
 prioritarios = list(REPORTES_DIR.glob("recon_priority_*.txt"))
 if prioritarios:
-    stdin = f"m\n{dominio}\n{nombre}\ns\n"
+    stdin = f"m\n{dominio}\n{nombre}\ny\n"
 else:
-    stdin = f"{dominio}\n{nombre}\ns\n"
+    stdin = f"{dominio}\n{nombre}\ny\n"
 
 env = os.environ.copy()
 env["CROWSNEST_BATCH_MODE"] = "1"

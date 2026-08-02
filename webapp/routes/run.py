@@ -10,7 +10,7 @@ from jobs import create_job
 bp = Blueprint("run", __name__)
 
 _VALID = {
-    "report", "diagnostico", "trabajo", "batch",
+    "report", "diagnostico", "trabajo", "batch", "enrich",
 }
 
 
@@ -18,7 +18,7 @@ _VALID = {
 @login_required
 def run_cmd(cmd):
     if cmd not in _VALID:
-        return jsonify({"error": "Comando inválido"}), 400
+        return jsonify({"error": "Invalid command"}), 400
     params = request.get_json() or {}
     job_id = create_job(cmd, params)
     return jsonify({"job_id": job_id})

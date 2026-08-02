@@ -87,6 +87,14 @@ def _build(cmd: str, params: dict) -> tuple[list, str | None]:
             params.get("auth_ref", ""),
         ], None
 
+    if cmd == "enrich":
+        # ./crowsnest.sh targets enriquecer — agentes LLM sobre la lista.
+        args = ["bash", CROWSNEST, "targets", "enriquecer"]
+        target = params.get("target_file", "")
+        if target:
+            args.append(str(REPO_DIR / "targets" / target))
+        return args, None
+
     if cmd == "batch":
         target = params.get("target_file", "")
         workers = str(params.get("workers", 3))

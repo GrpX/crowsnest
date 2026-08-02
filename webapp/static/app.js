@@ -202,9 +202,9 @@ function fillDomain(dominio) {
 async function runCommand(cmd, params, btn) {
   const origText = btn.textContent.trim();
   btn.disabled = true;
-  btn.textContent = 'EJECUTANDO...';
+  btn.textContent = 'RUNNING…';
 
-  appendTerminal(`INICIANDO: ${cmd.toUpperCase()} ${JSON.stringify(params)}`);
+  appendTerminal(`STARTING: ${cmd.toUpperCase()} ${JSON.stringify(params)}`);
 
   try {
     const res = await fetch(`/api/run/${cmd}`, {
@@ -234,7 +234,7 @@ async function runCommand(cmd, params, btn) {
       const code = parseInt(e.data);
       const ok = code === 0;
       appendTerminal(
-        ok ? `[✓] COMPLETADO (${cmd.toUpperCase()})` : `[✗] FALLÓ (código ${code})`,
+        ok ? `[✓] DONE (${cmd.toUpperCase()})` : `[✗] FAILED (exit ${code})`,
         ok ? 'success' : 'error',
       );
       updateJobHistoryStatus(jobId, ok ? 'SUCCESS' : 'FAILED');
@@ -245,7 +245,7 @@ async function runCommand(cmd, params, btn) {
     });
 
     es.onerror = () => {
-      appendTerminal('[✗] ERROR DE CONEXIÓN SSE', 'error');
+      appendTerminal('[✗] SSE CONNECTION ERROR', 'error');
       updateJobHistoryStatus(jobId, 'FAILED');
       es.close();
       btn.disabled = false;
@@ -262,23 +262,28 @@ async function runCommand(cmd, params, btn) {
 function runReport(btn) {
   const dominio = document.getElementById('report-dominio')?.value.trim();
   const nombre = document.getElementById('report-nombre')?.value.trim();
-  if (!dominio || !nombre) { alert('Dominio y nombre son requeridos'); return; }
+  if (!dominio || !nombre) { alert('Domain and name are required'); return; }
   runCommand('report', { dominio, nombre }, btn);
 }
 
 function runDiagnostico(btn) {
   const sel = document.getElementById('sel-sesiones');
   const dominio = sel?.value;
-  if (!dominio) { alert('Selecciona una sesión'); return; }
+  if (!dominio) { alert('Select a session'); return; }
   runCommand('diagnostico', { dominio }, btn);
+}
+
+function runEnrich(btn) {
+  const target_file = document.getElementById('sel-enrich-file')?.value || '';
+  runCommand('enrich', { target_file }, btn);
 }
 
 function runBatch(btn) {
   const sel = document.getElementById('sel-targets');
   const target_file = sel?.value;
   const workers = parseInt(document.getElementById('batch-workers')?.value || '3');
-  if (!target_file) { alert('Selecciona un archivo de targets'); return; }
-  if (!confirm(`¿Ejecutar batch con ${target_file} (${workers} workers)?`)) return;
+  if (!target_file) { alert('Select a domain list'); return; }
+  if (!confirm(`Run a batch scan over ${target_file} with ${workers} workers?`)) return;
   runCommand('batch', { target_file, workers }, btn);
 }
 
@@ -286,8 +291,8 @@ function runTrabajo(btn) {
   const dominio  = document.getElementById('trabajo-dominio')?.value.trim();
   const cliente  = document.getElementById('trabajo-cliente')?.value.trim();
   const auth_ref = document.getElementById('trabajo-auth')?.value.trim();
-  if (!dominio || !cliente || !auth_ref) { alert('Todos los campos son requeridos'); return; }
-  if (!confirm(`¿Ejecutar trabajo completo para ${dominio}?`)) return;
+  if (!dominio || !cliente || !auth_ref) { alert('All fields are required'); return; }
+  if (!confirm(`Run the full authorised pipeline against ${dominio}?`)) return;
   runCommand('trabajo', { dominio, cliente, auth_ref }, btn);
 }
 
@@ -335,7 +340,7 @@ function renderJobHistory() {
   if (!el) return;
 
   if (!jobHistory.length) {
-    el.innerHTML = '<li style="color:var(--text-dim)">Sin jobs activos</li>';
+    el.innerHTML = '<li style="color:var(--text-dim)">No active jobs</li>';
     return;
   }
 
@@ -360,13 +365,14 @@ async function loadTargetFiles() {
   try {
     const res = await fetch('/api/target-files');
     const files = await res.json();
-    const sel = document.getElementById('sel-targets');
-    if (!sel) return;
-    if (!files.length) {
-      sel.innerHTML = '<option value="">— sin archivos —</option>';
-      return;
+    // Dos selectores consumen la misma lista: batch y enrichment.
+    const opciones = files.length
+      ? files.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('')
+      : '<option value="">— no lists found —</option>';
+    for (const id of ['sel-targets', 'sel-enrich-file']) {
+      const sel = document.getElementById(id);
+      if (sel) sel.innerHTML = opciones;
     }
-    sel.innerHTML = files.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('');
   } catch (e) {
     console.error('loadTargetFiles', e);
   }
@@ -379,10 +385,10 @@ async function loadSesiones() {
     const sel = document.getElementById('sel-sesiones');
     if (!sel) return;
     if (!sessions.length) {
-      sel.innerHTML = '<option value="">— sin sesiones —</option>';
+      sel.innerHTML = '<option value="">— no sessions found —</option>';
       return;
     }
-    sel.innerHTML = '<option value="">— elegir sesión —</option>' +
+    sel.innerHTML = '<option value="">— select a session —</option>' +
       sessions.map(s => {
         const parts = s.split('_');
         const domain = parts.slice(0, -2).join('.');

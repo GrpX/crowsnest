@@ -31,12 +31,12 @@ if sessions:
 
 if detected:
     # crowsnest.sh will detect name and ask "¿Usar este nombre? [S/n]" → accept
-    stdin = f"{dominio}\nS\ns\nN\n"
+    stdin = f"{dominio}\nY\ny\nN\n"
 elif cliente_arg:
     # No auto-detected → crowsnest.sh asks for name directly
-    stdin = f"{dominio}\n{cliente_arg}\ns\nN\n"
+    stdin = f"{dominio}\n{cliente_arg}\ny\nN\n"
 else:
-    stdin = f"{dominio}\n\ns\nN\n"
+    stdin = f"{dominio}\n\ny\nN\n"
 
 proc = subprocess.run(
     ["bash", CROWSNEST, "diagnostico"],

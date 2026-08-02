@@ -30,7 +30,7 @@ DB_FILE="${SCRIPT_DIR}/db/targets.json"
 header() {
     clear
     echo -e "${RED}┌─────────────────────────────────────────────────────────┐${NC}"
-    echo -e "${RED}│${NC}  ${WHITE}Crowsnest${NC} ${GRAY}— reconocimiento pasivo${NC}                ${RED}│${NC}"
+    echo -e "${RED}│${NC}  ${WHITE}Crowsnest${NC} ${GRAY}— passive reconnaissance${NC}             ${RED}│${NC}"
     echo -e "${RED}│${NC}  ${GRAY}$1${NC}"
     echo -e "${RED}└─────────────────────────────────────────────────────────┘${NC}"
     echo ""
@@ -45,8 +45,8 @@ ask()     { echo -e "${CYAN}[?]${NC} $1"; }
 
 check_dep() {
     if ! command -v "$1" &>/dev/null; then
-        error "Falta: $1"
-        echo -e "    Instala con: ${GRAY}$2${NC}"
+        error "Missing: $1"
+        echo -e "    Install with: ${GRAY}$2${NC}"
         return 1
     fi
     return 0
@@ -54,16 +54,16 @@ check_dep() {
 
 check_docker_running() {
     if ! docker info &>/dev/null; then
-        error "Docker no está corriendo."
-        echo -e "    Inicia Docker Desktop (Windows) o: ${GRAY}sudo systemctl start docker${NC}"
+        error "Docker is not running."
+        echo -e "    Start Docker Desktop (Windows) or: ${GRAY}sudo systemctl start docker${NC}"
         exit 1
     fi
 }
 
 check_container_built() {
     if ! docker image inspect "${IMAGE_NAME}" &>/dev/null; then
-        error "La imagen '${IMAGE_NAME}' no está construida."
-        echo -e "    Ejecuta primero: ${GRAY}docker-compose build${NC}"
+        error "Image '${IMAGE_NAME}' is not built."
+        echo -e "    Build it first: ${GRAY}docker compose build${NC}"
         exit 1
     fi
 }
@@ -222,12 +222,12 @@ PYEOF
 # MODO 0.5: ENRIQUECER — OpenClaw Orchestrator (Ollama + Crawl4AI)
 # =============================================================================
 cmd_targets_enriquecer() {
-    header "Fase 0.5 · Enriquecimiento de targets — OpenClaw"
+    header "Stage 0.5 · Target enrichment — OpenClaw"
 
     local OPENCLAW_DIR="${SCRIPT_DIR}/openclaw"
     if [[ ! -f "${OPENCLAW_DIR}/run_batch.py" ]]; then
-        error "No se encontró openclaw/run_batch.py"
-        echo -e "  El módulo openclaw_orchestrator no está instalado."
+        error "openclaw/run_batch.py not found"
+        echo -e "  The openclaw_orchestrator module is not installed."
         exit 1
     fi
     if ! check_dep "python3" ""; then exit 1; fi
@@ -253,9 +253,9 @@ cmd_targets_enriquecer() {
         INPUT="${TARGETS_FILE}"
     fi
     if [[ -z "${INPUT}" || ! -f "${INPUT}" ]]; then
-        error "No se encontró una lista de dominios objetivo."
-        echo -e "  Uso: ${GRAY}./crowsnest.sh targets enriquecer <ruta/dominios.txt>${NC}"
-        echo -e "  Por defecto: ${GRAY}${TARGETS_FILE}${NC}"
+        error "No target domain list found."
+        echo -e "  Usage: ${GRAY}./crowsnest.sh targets enriquecer <path/domains.txt>${NC}"
+        echo -e "  Default: ${GRAY}${TARGETS_FILE}${NC}"
         exit 1
     fi
     INPUT="$(cd "$(dirname "${INPUT}")" && pwd)/$(basename "${INPUT}")"
@@ -266,17 +266,17 @@ cmd_targets_enriquecer() {
     OUT_NAME="targets_enriquecidos_${TS}.json"
     OUT_HOST="${REPORTES_DIR}/${OUT_NAME}"
 
-    info "Entorno:  ${GRAY}${ENTORNO}${NC}"
-    info "Entrada:  ${GRAY}${INPUT}${NC}"
-    info "Salida:   ${GRAY}${OUT_HOST}${NC}"
-    info "Ollama:   ${GRAY}${OLLAMA_HOST_URL}${NC}"
+    info "Environment: ${GRAY}${ENTORNO}${NC}"
+    info "Input:       ${GRAY}${INPUT}${NC}"
+    info "Output:      ${GRAY}${OUT_HOST}${NC}"
+    info "LLM:         ${GRAY}${OLLAMA_HOST_URL}${NC}"
     echo ""
 
     # ── Ejecutar: preferir el contenedor (trae Crawl4AI + cliente Ollama) ─────
     if command -v "${DOCKER_BIN%% *}" &>/dev/null \
        && ${DOCKER_BIN} info &>/dev/null \
        && ${DOCKER_BIN} image inspect "${IMAGE_NAME}" &>/dev/null; then
-        info "Ejecutando en un contenedor de ${GRAY}${IMAGE_NAME}${NC}..."
+        info "Running in a ${GRAY}${IMAGE_NAME}${NC} container…"
         ${DOCKER_BIN} run --rm \
             --network host \
             -e OLLAMA_HOST="${OLLAMA_HOST_URL}" \
@@ -290,8 +290,8 @@ cmd_targets_enriquecer() {
                 --input  /home/work/input/domains.txt \
                 --output "/home/work/results/${OUT_NAME}"
     else
-        warn "Imagen Docker no disponible — usando el Python del host."
-        warn "Requiere: ${GRAY}pip install -r openclaw/requirements.txt${NC}"
+        warn "Docker image unavailable — falling back to the host Python."
+        warn "Requires: ${GRAY}pip install -r openclaw/requirements.txt${NC}"
         OLLAMA_HOST="${OLLAMA_HOST_URL}" python3 "${OPENCLAW_DIR}/run_batch.py" \
             --config "${OPENCLAW_DIR}/config.json" \
             --input  "${INPUT}" \
@@ -300,9 +300,9 @@ cmd_targets_enriquecer() {
 
     echo ""
     if [[ -s "${OUT_HOST}" ]]; then
-        log "Targets enriquecidos en: ${GRAY}${OUT_HOST}${NC}"
+        log "Enriched targets written to: ${GRAY}${OUT_HOST}${NC}"
     else
-        error "No se generó el archivo de salida."
+        error "No output file was produced."
         exit 1
     fi
 }
@@ -311,7 +311,7 @@ cmd_targets_enriquecer() {
 # MODO 1: RECON — califica targets rápido (sin Docker)
 # =============================================================================
 cmd_recon() {
-    header "Fase 1 · Recon de targets"
+    header "Stage 1 · Target recon"
 
     # Verificar checkdmarc instalado
     if ! check_dep "checkdmarc" "pip install checkdmarc --break-system-packages"; then
@@ -322,34 +322,34 @@ cmd_recon() {
     mkdir -p "$(dirname "${TARGETS_FILE}")"
     mkdir -p "${REPORTES_DIR}"
 
-    step "¿Cómo quieres ingresar los dominios?"
-    echo "  1) Un solo dominio (escribirlo ahora)"
-    echo "  2) Lista desde archivo  [${TARGETS_FILE}]"
-    echo "  3) Escribir varios ahora (uno por línea, línea vacía para terminar)"
+    step "How do you want to enter the domains?"
+    echo "  1) A single domain (type it now)"
+    echo "  2) A list from a file  [${TARGETS_FILE}]"
+    echo "  3) Type several now (one per line, blank line to finish)"
     echo ""
-    ask "Opción [1/2/3]:"
+    ask "Option [1/2/3]:"
     read -r opcion
 
     declare -a DOMINIOS=()
 
     case "$opcion" in
         1)
-            ask "Dominio a analizar (ej: estudiojuridico.cl):"
+            ask "Domain to analyse (e.g. example.com):"
             read -r dom
             dom="${dom#https://}"; dom="${dom#http://}"; dom="${dom%%/*}"
             DOMINIOS=("$dom")
             ;;
         2)
             if [[ ! -f "${TARGETS_FILE}" ]]; then
-                error "No existe ${TARGETS_FILE}"
-                info  "Crea el archivo con un dominio por línea y vuelve a correr."
+                error "${TARGETS_FILE} does not exist"
+                info  "Create it with one domain per line and run again."
                 exit 1
             fi
             mapfile -t DOMINIOS < <(grep -v '^\s*#' "${TARGETS_FILE}" | grep -v '^\s*$')
-            info "Se analizarán ${#DOMINIOS[@]} dominios desde el archivo."
+            info "Analysing ${#DOMINIOS[@]} domains from the file."
             ;;
         3)
-            ask "Ingresa dominios (uno por línea, Enter en blanco para terminar):"
+            ask "Enter domains (one per line, blank line to finish):"
             while true; do
                 read -r dom
                 [[ -z "$dom" ]] && break
@@ -358,11 +358,11 @@ cmd_recon() {
             done
             ;;
         *)
-            error "Opción inválida."; exit 1 ;;
+            error "Invalid option."; exit 1 ;;
     esac
 
     if [[ ${#DOMINIOS[@]} -eq 0 ]]; then
-        error "No se ingresaron dominios."; exit 1
+        error "No domains entered."; exit 1
     fi
 
     # Filtrar dominios ya registrados en DB
@@ -381,17 +381,17 @@ PYEOF
             declare -a _DOM_NUEVOS=()
             for _d in "${DOMINIOS[@]}"; do
                 if echo "$YA_EN_DB" | grep -qx "$_d"; then
-                    warn "Ignorando '${_d}' — ya existe en DB"
+                    warn "Skipping '${_d}' — already in the database"
                 else
                     _DOM_NUEVOS+=("$_d")
                 fi
             done
             DOMINIOS=("${_DOM_NUEVOS[@]+"${_DOM_NUEVOS[@]}"}")
-            [[ ${#DOMINIOS[@]} -eq 0 ]] && { warn "Todos los dominios ya están en DB."; exit 0; }
+            [[ ${#DOMINIOS[@]} -eq 0 ]] && { warn "Every domain is already in the database."; exit 0; }
         fi
     fi
 
-    step "Analizando ${#DOMINIOS[@]} dominio(s)..."
+    step "Analysing ${#DOMINIOS[@]} domain(s)…"
     echo ""
 
     # Archivo de resultados de sesión
@@ -459,13 +459,13 @@ PYEOF
 
         # Mostrar resultado
         printf "  Puntaje:  "; score_color "${SCORE:-0}"
-        echo -e "  Problemas: ${GRAY}${ISSUES}${NC}"
+        echo -e "  Issues:  ${GRAY}${ISSUES}${NC}"
 
         if [[ "$PRIORITY_HIT" == "SI" ]]; then
-            echo -e "  Estado:   ${BRED}● TARGET PRIORITARIO — enviar informe${NC}"
+            echo -e "  Status:  ${BRED}● PRIORITY TARGET — worth a full scan${NC}"
             PRIORITY+=("$dominio")
         else
-            echo -e "  Estado:   ${GREEN}● Descartado — buena configuración${NC}"
+            echo -e "  Status:  ${GREEN}● Low priority — well configured${NC}"
         fi
         echo ""
 
@@ -473,17 +473,17 @@ PYEOF
     done
 
     # ── RESUMEN ──────────────────────────────────────────────────────────────
-    step "Resumen de sesión"
+    step "Session summary"
 
-    echo -e "  Dominios analizados : ${WHITE}${#DOMINIOS[@]}${NC}"
+    echo -e "  Domains analysed    : ${WHITE}${#DOMINIOS[@]}${NC}"
     echo -e "  Targets prioritarios: ${BRED}${#PRIORITY[@]}${NC}"
-    echo -e "  Descartados         : ${GREEN}$(( ${#DOMINIOS[@]} - ${#PRIORITY[@]} ))${NC}"
+    echo -e "  Low priority        : ${GREEN}$(( ${#DOMINIOS[@]} - ${#PRIORITY[@]} ))${NC}"
     echo ""
 
     # Guardar resultados
     {
         echo "# Crowsnest — Resultados de recon ${SESSION_DATE}"
-        echo "# Formato: SCORE | PRIORITY_HIT | DOMINIO | PROBLEMAS"
+        echo "# Format: SCORE | PRIORITY_HIT | DOMAIN | ISSUES"
         for r in "${TODOS[@]}"; do echo "$r"; done
     } > "${RESULTS_FILE}"
 
@@ -493,30 +493,30 @@ PYEOF
         echo -e "  ${GRAY}${PRIORITY_FILE}${NC}"
         echo ""
 
-        ask "¿Generar informe ahora para el primer target prioritario? [s/N]"
+        ask "Generate a report now for the first priority target? [y/N]"
         read -r resp
-        if [[ "${resp,,}" == "s" ]]; then
+        if [[ "${resp,,}" == "y" || "${resp,,}" == "s" ]]; then
             PRIMER="${PRIORITY[0]}"
-            ask "Nombre del target para '${PRIMER}' (ej: Ejemplo S.A.):"
+            ask "Target name for '${PRIMER}' (e.g. Example Ltd):"
             read -r nombre_cliente
             _run_report "$PRIMER" "$nombre_cliente"
         else
-            info "Cuando quieras el informe, ejecuta:"
+            info "When you want the report, run:"
             echo -e "  ${GRAY}./crowsnest.sh report${NC}"
         fi
     else
-        warn "Ningún target prioritario en esta sesión."
+        warn "No priority targets in this session."
     fi
 
     echo ""
-    log "Resultados completos guardados en: ${GRAY}${RESULTS_FILE}${NC}"
+    log "Full results saved to: ${GRAY}${RESULTS_FILE}${NC}"
 }
 
 # =============================================================================
 # MODO 2: FLASH — informe completo con Docker
 # =============================================================================
 cmd_report() {
-    header "Fase 1 · Informe (con Docker)"
+    header "Stage 1 · Report (Docker)"
 
     check_docker_running
     check_container_built
@@ -529,13 +529,13 @@ cmd_report() {
     fi
 
     # ── INPUT ─────────────────────────────────────────────────────────────────
-    step "Datos del target"
+    step "Target details"
 
     # ¿Hay prioritarios del día?
     LATEST_PRIORITY=$(ls -t "${REPORTES_DIR}"/recon_priority_*.txt 2>/dev/null | head -1 || echo "")
 
     if [[ -n "$LATEST_PRIORITY" ]]; then
-        info "Targets prioritarios disponibles:"
+        info "Priority targets available:"
         # Excluir dominios ya procesados (cualquier status distinto de queued)
         mapfile -t LISTA < <(python3 - "$LATEST_PRIORITY" <<PYEOF
 import json, sys
@@ -561,37 +561,37 @@ PYEOF
         for i in "${!LISTA[@]}"; do
             echo "  $((i+1))) ${LISTA[$i]}"
         done
-        echo "  m) Ingresar manualmente"
+        echo "  m) Enter manually"
         echo ""
-        ask "Elige [número o m]:"
+        ask "Choose [number or m]:"
         read -r sel
 
         if [[ "$sel" == "m" ]] || [[ -z "$sel" ]]; then
-            ask "Dominio:"
+            ask "Domain:"
             read -r DOMINIO
         elif [[ "$sel" =~ ^[0-9]+$ ]] && [[ "$sel" -le "${#LISTA[@]}" ]]; then
             DOMINIO="${LISTA[$((sel-1))]}"
         else
-            ask "Dominio:"
+            ask "Domain:"
             read -r DOMINIO
         fi
     else
-        ask "Dominio del target (ej: estudiojuridico.cl):"
+        ask "Target domain (e.g. example.com):"
         read -r DOMINIO
     fi
 
     DOMINIO="${DOMINIO#https://}"; DOMINIO="${DOMINIO#http://}"; DOMINIO="${DOMINIO%%/*}"
 
-    ask "Nombre del target (ej: Ejemplo S.A.):"
+    ask "Target name (e.g. Example Ltd):"
     read -r CLIENTE
 
     echo ""
-    info "Dominio : ${WHITE}${DOMINIO}${NC}"
-    info "Cliente : ${WHITE}${CLIENTE}${NC}"
+    info "Domain : ${WHITE}${DOMINIO}${NC}"
+    info "Name   : ${WHITE}${CLIENTE}${NC}"
     echo ""
-    ask "¿Confirmar y ejecutar? [s/N]"
+    ask "Confirm and run? [y/N]"
     read -r confirm
-    [[ "${confirm,,}" != "s" ]] && { warn "Cancelado."; exit 0; }
+    [[ "${confirm,,}" != "y" && "${confirm,,}" != "s" ]] && { warn "Cancelled."; exit 0; }
 
     _run_report "$DOMINIO" "$CLIENTE"
 }
@@ -614,8 +614,8 @@ _run_report() {
 
     mkdir -p "${SESSION_DIR}"/{subdomains,email,nuclei,technologies,http}
 
-    step "Ejecutando escaneo OSINT en Docker (~15 min)"
-    info "Puedes seguir el progreso en tiempo real abajo ↓"
+    step "Running the OSINT scan in Docker (~15 min)"
+    info "Live progress below ↓"
     echo ""
 
     docker run --rm \
@@ -651,7 +651,7 @@ _run_report() {
     # informe se genera igual sin esa seccion.
     local SUMMARY_TXT="${SESSION_DIR}/summary_${SAFE_DOM}.txt"
     if [[ -s "${SUMMARY_TXT}" ]]; then
-        info "Resumen del summarizer: ${GRAY}$(basename "${SUMMARY_TXT}")${NC}"
+        info "Summarizer output: ${GRAY}$(basename "${SUMMARY_TXT}")${NC}"
         COMMON_ARGS+=("--summary" "${SUMMARY_TXT}")
     fi
     [[ -n "$DMARC_JSON" ]] && COMMON_ARGS+=("--dmarc" "${DMARC_JSON}")
@@ -659,7 +659,7 @@ _run_report() {
 
     # ── Report JSON ───────────────────────────────────────────────────────────
     # El PDF NO se genera aquí — scripts/generate_pdf.py lo arma desde este JSON.
-    step "Generando JSON del informe"
+    step "Building the summary report JSON"
     local REPORT_JSON="${AUDIT_DIR}/${JSON_REPORT}"
 
     python3 "${SCRIPT_DIR}/scripts/nuclei_to_report.py" "${COMMON_ARGS[@]}" \
@@ -667,7 +667,7 @@ _run_report() {
         --output "${REPORT_JSON}"
 
     # ── Diagnóstico JSON ──────────────────────────────────────────────────────
-    step "Generando JSON detallado"
+    step "Building the detailed report JSON"
     local DETAIL_JSON="${AUDIT_DIR}/${JSON_DETAIL}"
 
     python3 "${SCRIPT_DIR}/scripts/nuclei_to_report.py" "${COMMON_ARGS[@]}" \
@@ -681,30 +681,30 @@ _run_report() {
     # ── RESULTADO ─────────────────────────────────────────────────────────────
     echo ""
     echo -e "${RED}┌─────────────────────────────────────────────────────────┐${NC}"
-    echo -e "${RED}│${NC}  ${BGREEN}✓ Escaneo completado — JSONs listos${NC}                     ${RED}│${NC}"
+    echo -e "${RED}│${NC}  ${BGREEN}✓ Scan complete — report JSON ready${NC}                     ${RED}│${NC}"
     echo -e "${RED}│${NC}  ${GRAY}${CLIENTE}${NC}"
     echo -e "${RED}├─────────────────────────────────────────────────────────┤${NC}"
-    echo -e "${RED}│${NC}  Report JSON     : ${GRAY}$(basename "${REPORT_JSON}")${NC}"
-    echo -e "${RED}│${NC}  Diagnóstico JSON: ${GRAY}$(basename "${DETAIL_JSON}")${NC}"
+    echo -e "${RED}│${NC}  Summary JSON  : ${GRAY}$(basename "${REPORT_JSON}")${NC}"
+    echo -e "${RED}│${NC}  Detailed JSON : ${GRAY}$(basename "${DETAIL_JSON}")${NC}"
     echo -e "${RED}├─────────────────────────────────────────────────────────┤${NC}"
     echo -e "${RED}│${NC}  Dir: ${GRAY}${AUDIT_DIR}${NC}"
     echo -e "${RED}└─────────────────────────────────────────────────────────┘${NC}"
     echo ""
 
-    info "Genera el PDF con:"
-    echo -e "  ${GRAY}python3 scripts/generate_pdf.py --input ${REPORT_JSON} --output informe.pdf${NC}"
+    info "Render the PDF with:"
+    echo -e "  ${GRAY}python3 scripts/generate_pdf.py --input ${REPORT_JSON} --output report.pdf${NC}"
 }
 
 # =============================================================================
 # MODO 2b: DIAGNÓSTICO — regenera PDF desde sesión existente (sin nuevo escaneo)
 # =============================================================================
 cmd_diagnostico() {
-    header "Diagnóstico · Regenerar desde sesión existente"
+    header "Re-render · Detailed report from an existing session"
 
     if ! check_dep "python3" ""; then exit 1; fi
 
-    step "Dominio a regenerar"
-    ask "Dominio (ej: empresa-ejemplo.cl):"
+    step "Domain to re-render"
+    ask "Domain (e.g. example.com):"
     read -r DOMINIO
     DOMINIO="${DOMINIO#https://}"; DOMINIO="${DOMINIO#http://}"; DOMINIO="${DOMINIO%%/*}"
 
@@ -715,12 +715,12 @@ cmd_diagnostico() {
     SESSION_DIR=$(ls -td "${REPORTES_DIR}/${SAFE_DOM}_"* 2>/dev/null | head -1 || echo "")
 
     if [[ -z "$SESSION_DIR" ]] || [[ ! -d "$SESSION_DIR" ]]; then
-        error "No se encontró sesión previa para '${DOMINIO}' en ${REPORTES_DIR}/"
-        info "Genera un escaneo primero con: ${GRAY}./crowsnest.sh report${NC}"
+        error "No previous session for '${DOMINIO}' under ${REPORTES_DIR}/"
+        info "Run a scan first: ${GRAY}./crowsnest.sh report${NC}"
         exit 1
     fi
 
-    info "Sesión: ${GRAY}${SESSION_DIR}${NC}"
+    info "Session: ${GRAY}${SESSION_DIR}${NC}"
     echo ""
 
     # Detectar nombre del cliente desde JSON existente
@@ -741,25 +741,25 @@ except: pass
     fi
 
     if [[ -n "$CLIENTE" ]]; then
-        info "Cliente detectado: ${WHITE}${CLIENTE}${NC}"
-        ask "¿Usar este nombre? [S/n]"
+        info "Name detected: ${WHITE}${CLIENTE}${NC}"
+        ask "Use this name? [Y/n]"
         read -r use_it
         if [[ "${use_it,,}" == "n" ]]; then
-            ask "Nombre del cliente:"
+            ask "Target name:"
             read -r CLIENTE
         fi
     else
-        ask "Nombre del target (ej: Ejemplo S.A.):"
+        ask "Target name (e.g. Example Ltd):"
         read -r CLIENTE
     fi
 
     echo ""
-    info "Dominio : ${WHITE}${DOMINIO}${NC}"
-    info "Cliente : ${WHITE}${CLIENTE}${NC}"
+    info "Domain : ${WHITE}${DOMINIO}${NC}"
+    info "Name   : ${WHITE}${CLIENTE}${NC}"
     echo ""
-    ask "¿Regenerar PDF de diagnóstico sin nuevo escaneo? [s/N]"
+    ask "Re-render the detailed PDF without a new scan? [y/N]"
     read -r confirm
-    [[ "${confirm,,}" != "s" ]] && { warn "Cancelado."; exit 0; }
+    [[ "${confirm,,}" != "y" && "${confirm,,}" != "s" ]] && { warn "Cancelled."; exit 0; }
 
     _regen_diagnostico "${DOMINIO}" "${CLIENTE}" "${SESSION_DIR}"
 }
@@ -779,7 +779,7 @@ _regen_diagnostico() {
     local DETAIL_JSON="${SESSION_DIR}/detailed_${SAFE_DOM}.json"
     local DIAG_PDF="${SESSION_DIR}/Crowsnest_Detailed_${SAFE_DOM}_${TIMESTAMP}.pdf"
 
-    step "Regenerando diagnóstico de impacto PDF (sin nuevo escaneo)"
+    step "Re-rendering the detailed report PDF (no new scan)"
 
     local -a ARGS=("--client" "${CLIENTE}" "--domain" "${DOMINIO}" \
                    "--output" "${DETAIL_JSON}" "--report-type" "detailed")
@@ -817,7 +817,7 @@ PYEOF
 
     echo ""
     echo -e "${RED}┌─────────────────────────────────────────────────────────┐${NC}"
-    echo -e "${RED}│${NC}  ${BGREEN}✓ Diagnóstico regenerado (sin nuevo escaneo)${NC}           ${RED}│${NC}"
+    echo -e "${RED}│${NC}  ${BGREEN}✓ Detailed report re-rendered (no new scan)${NC}          ${RED}│${NC}"
     echo -e "${RED}│${NC}  ${GRAY}${CLIENTE}${NC}"
     echo -e "${RED}│${NC}  Riesgo    : $(score_color "${R_SCORE:-0}") — ${R_LEVEL}"
     echo -e "${RED}│${NC}  Escenarios: ${WHITE}${R_SCEN:-0}${NC} de impacto en el negocio identificados"
@@ -826,45 +826,45 @@ PYEOF
     echo -e "${RED}└─────────────────────────────────────────────────────────┘${NC}"
     echo ""
 
-    ask "¿Abrir el PDF ahora? [s/N]"
+    ask "Open the PDF now? [y/N]"
     read -r abrir
-    [[ "${abrir,,}" == "s" ]] && _open_pdf "${DIAG_PDF}"
+    [[ "${abrir,,}" == "y" || "${abrir,,}" == "s" ]] && _open_pdf "${DIAG_PDF}"
 
-    info "Diagnóstico listo para adjuntar a la propuesta comercial."
+    info "Detailed report ready."
 }
 
 # =============================================================================
 # MODO 3: TRABAJO — pipeline completo para cliente autorizado
 # =============================================================================
 cmd_trabajo() {
-    header "Fase 2 · Trabajo Técnico (cliente autorizado)"
+    header "Stage 2 · Remediation pipeline (authorised target)"
 
     check_docker_running
     check_container_built
 
-    step "Datos del cliente"
+    step "Target details"
 
-    ask "Dominio del cliente (ej: empresa.cl):"
+    ask "Target domain (e.g. example.com):"
     read -r DOMINIO
     DOMINIO="${DOMINIO#https://}"; DOMINIO="${DOMINIO#http://}"; DOMINIO="${DOMINIO%%/*}"
 
-    ask "Nombre del target (ej: Ejemplo S.A.):"
+    ask "Target name (e.g. Example Ltd):"
     read -r CLIENTE
 
-    ask "N° de autorización / referencia del contrato (ej: AUTH-2025-001):"
+    ask "Authorisation reference (e.g. AUTH-2026-001):"
     read -r AUTH_REF
 
     echo ""
-    warn "Este comando ejecuta un escaneo COMPLETO (~35 min)."
-    warn "Solo proceder con autorización firmada del cliente."
+    warn "This runs a FULL scan (~35 min)."
+    warn "Only proceed with written authorisation from the system owner."
     echo ""
     info "Dominio     : ${WHITE}${DOMINIO}${NC}"
     info "Cliente     : ${WHITE}${CLIENTE}${NC}"
-    info "Autorización: ${WHITE}${AUTH_REF}${NC}"
+    info "Authorisation: ${WHITE}${AUTH_REF}${NC}"
     echo ""
-    ask "¿Confirmar y ejecutar escaneo completo? [s/N]"
+    ask "Confirm and run the full scan? [y/N]"
     read -r confirm
-    [[ "${confirm,,}" != "s" ]] && { warn "Cancelado."; exit 0; }
+    [[ "${confirm,,}" != "y" && "${confirm,,}" != "s" ]] && { warn "Cancelled."; exit 0; }
 
     _run_trabajo "$DOMINIO" "$CLIENTE" "$AUTH_REF"
 }
@@ -881,17 +881,17 @@ _run_trabajo() {
 
     # Registrar autorización para trazabilidad
     {
-        echo "# Crowsnest — Registro de autorización de escaneo"
+        echo "# Crowsnest — scan authorisation record"
         echo "Fecha       : $(date)"
         echo "Cliente     : ${CLIENTE}"
         echo "Dominio     : ${DOMINIO}"
-        echo "Autorización: ${AUTH_REF}"
+        echo "Authorisation: ${AUTH_REF}"
         echo "Operador    : $(whoami)@$(hostname)"
-    } > "${SESSION_DIR}/autorizacion_${SAFE_DOM}.txt"
-    log "Autorización registrada en: ${GRAY}${SESSION_DIR}/autorizacion_${SAFE_DOM}.txt${NC}"
+    } > "${SESSION_DIR}/authorisation_${SAFE_DOM}.txt"
+    log "Authorisation recorded at: ${GRAY}${SESSION_DIR}/authorisation_${SAFE_DOM}.txt${NC}"
 
     step "Ejecutando pipeline completo en Docker (~35 min)"
-    info "Puedes seguir el progreso en tiempo real abajo ↓"
+    info "Live progress below ↓"
     echo ""
 
     docker run --rm \
@@ -906,7 +906,7 @@ _run_trabajo() {
         bash /home/work/scripts/audit.sh "${DOMINIO}" "/home/work/results/${SAFE_DOM}_${TIMESTAMP}" --full
 
     echo ""
-    step "Generando informe técnico PDF"
+    step "Rendering the remediation report PDF"
 
     AUDIT_DIR="${SESSION_DIR}"
 
@@ -965,21 +965,21 @@ PYEOF
 
     echo ""
     echo -e "${RED}┌─────────────────────────────────────────────────────────┐${NC}"
-    echo -e "${RED}│${NC}  ${BGREEN}✓ Informe técnico generado${NC}                             ${RED}│${NC}"
+    echo -e "${RED}│${NC}  ${BGREEN}✓ Remediation report generated${NC}                         ${RED}│${NC}"
     echo -e "${RED}│${NC}  ${GRAY}${CLIENTE}${NC}"
-    echo -e "${RED}│${NC}  ${GRAY}Autorización: ${AUTH_REF}${NC}"
+    echo -e "${RED}│${NC}  ${GRAY}Authorisation: ${AUTH_REF}${NC}"
     echo -e "${RED}├─────────────────────────────────────────────────────────┤${NC}"
     echo -e "${RED}│${NC}  Riesgo  : $(score_color "${R_SCORE:-0}") — ${R_LEVEL}"
-    echo -e "${RED}│${NC}  Hallazgos: ${WHITE}${R_TOTAL:-0}${NC} total  ${BRED}Crítico:${R_CRIT:-0}${NC}  ${YELLOW}Alto:${R_HIGH:-0}${NC}  Medio:${R_MED:-0}  Bajo:${R_LOW:-0}"
+    echo -e "${RED}│${NC}  Findings: ${WHITE}${R_TOTAL:-0}${NC} total  ${BRED}Critical:${R_CRIT:-0}${NC}  ${YELLOW}High:${R_HIGH:-0}${NC}  Med:${R_MED:-0}  Low:${R_LOW:-0}"
     echo -e "${RED}├─────────────────────────────────────────────────────────┤${NC}"
     echo -e "${RED}│${NC}  PDF : ${GRAY}${PDF_OUT}${NC}"
     echo -e "${RED}│${NC}  JSON: ${GRAY}${INFORME_JSON}${NC}"
     echo -e "${RED}└─────────────────────────────────────────────────────────┘${NC}"
     echo ""
 
-    ask "¿Abrir el PDF ahora? [s/N]"
+    ask "Open the PDF now? [y/N]"
     read -r abrir
-    [[ "${abrir,,}" == "s" ]] && _open_pdf "${PDF_OUT}"
+    [[ "${abrir,,}" == "y" || "${abrir,,}" == "s" ]] && _open_pdf "${PDF_OUT}"
 
     info "Informe listo para entregar al cliente."
 }
@@ -1014,7 +1014,7 @@ cmd_batch() {
     fi
 
     if [[ -z "$TARGET_FILE" ]] || [[ ! -f "$TARGET_FILE" ]]; then
-        error "No se encontró lista de targets prioritarios."
+        error "No priority target list found."
         info "Genera una con: ${GRAY}./crowsnest.sh recon${NC}"
         info "O provee una ruta: ${GRAY}./crowsnest.sh batch targets/mi_lista.txt${NC}"
         exit 1
@@ -1025,12 +1025,12 @@ cmd_batch() {
     local TOTAL="${#DOMINIOS[@]}"
 
     if [[ $TOTAL -eq 0 ]]; then
-        error "El archivo '${TARGET_FILE}' no contiene dominios."
+        error "'${TARGET_FILE}' contains no domains."
         exit 1
     fi
 
     info "Lista   : ${GRAY}${TARGET_FILE}${NC}"
-    info "Dominios: ${WHITE}${TOTAL}${NC}"
+    info "Domains: ${WHITE}${TOTAL}${NC}"
     echo ""
 
     # ── Número de workers ────────────────────────────────────────────────────
@@ -1038,7 +1038,7 @@ cmd_batch() {
     if [[ -n "$FLAG_WORKERS" ]]; then
         N_WORKERS="$FLAG_WORKERS"
     else
-        ask "¿Cuántos workers en paralelo? [1-5, default 3]:"
+        ask "How many parallel workers? [1-5, default 3]:"
         read -r N_WORKERS
         N_WORKERS="${N_WORKERS:-3}"
     fi
@@ -1052,7 +1052,7 @@ cmd_batch() {
     if [[ $FLAG_AUTO_NAME -eq 1 || $FLAG_CONFIRM -eq 1 ]]; then
         modo_nombres="a"
     else
-        echo "  a) Automático — derivar del dominio  (ejemplo-legal.cl → Ejemplo Legal)"
+        echo "  a) Automatic — derive from the domain  (example-corp.com → Example Corp)"
         echo "  m) Manual — pedir nombre por cada dominio"
         echo ""
         ask "Modo de nombres [a/m, default a]:"
@@ -1079,21 +1079,21 @@ cmd_batch() {
     fi
 
     # ── Confirmación inicial ──────────────────────────────────────────────────
-    step "Plan de ejecución"
+    step "Execution plan"
     local i
     for i in "${!DOMINIOS[@]}"; do
         printf "  %2d) %-40s → %s\n" "$((i+1))" "${DOMINIOS[$i]}" "${NOMBRES[$i]}"
     done
     echo ""
     info "Workers paralelos : ${WHITE}${N_WORKERS}${NC}"
-    info "Total dominios    : ${WHITE}${TOTAL}${NC}"
+    info "Total domains     : ${WHITE}${TOTAL}${NC}"
     echo ""
     if [[ $FLAG_CONFIRM -eq 1 ]]; then
-        info "Confirmación automática (--confirm)"
+        info "Auto-confirmed (--confirm)"
     else
-        ask "¿Iniciar batch? [s/N]"
+        ask "Start the batch? [y/N]"
         read -r confirm
-        [[ "${confirm,,}" != "s" ]] && { warn "Cancelado."; exit 0; }
+        [[ "${confirm,,}" != "y" && "${confirm,,}" != "s" ]] && { warn "Cancelled."; exit 0; }
     fi
 
     # ── Ejecución en paralelo ─────────────────────────────────────────────────
@@ -1130,7 +1130,7 @@ cmd_batch() {
                         echo -e "${BGREEN}[✓ $((pidx+1))/${TOTAL}]${NC} ${WHITE}${d}${NC} — completado"
                         completed=$((completed + 1))
                     else
-                        echo -e "${BRED}[✗ $((pidx+1))/${TOTAL}]${NC} ${WHITE}${d}${NC} — FALLÓ  (log: ${safe}.log)"
+                        echo -e "${BRED}[✗ $((pidx+1))/${TOTAL}]${NC} ${WHITE}${d}${NC} — FAILED  (log: ${safe}.log)"
                         failed=$((failed + 1))
                     fi
                 else
@@ -1162,7 +1162,7 @@ cmd_batch() {
                     completed=$((completed + 1))
                 else
                     local fs="${d//./_}"
-                    echo -e "${BRED}[✗ $((pidx+1))/${TOTAL}]${NC} ${WHITE}${d}${NC} — FALLÓ  (log: ${fs}.log)"
+                    echo -e "${BRED}[✗ $((pidx+1))/${TOTAL}]${NC} ${WHITE}${d}${NC} — FAILED  (log: ${fs}.log)"
                     failed=$((failed + 1))
                 fi
             else
@@ -1195,37 +1195,37 @@ cmd_batch() {
 # AYUDA
 # =============================================================================
 cmd_help() {
-    header "Ayuda"
-    echo -e "  ${WHITE}./crowsnest.sh targets enriquecer${NC}  ${GRAY}[ruta/dominios.txt]${NC}"
-    echo -e "  ${GRAY}Enriquece una lista de dominios con OpenClaw (agentes LLM).${NC}"
-    echo -e "  ${GRAY}Devuelve {name, dominio, email, confianza} por target.${NC}"
+    header "Help"
+    echo -e "  ${WHITE}./crowsnest.sh targets enriquecer${NC}  ${GRAY}[path/domains.txt]${NC}"
+    echo -e "  ${GRAY}Enrich a domain list with the OpenClaw LLM agents.${NC}"
+    echo -e "  ${GRAY}Returns {name, domain, email, confidence} per target.${NC}"
     echo ""
     echo -e "  ${WHITE}./crowsnest.sh recon${NC}"
-    echo -e "  ${GRAY}Califica targets con checkdmarc (sin Docker).${NC}"
-    echo -e "  ${GRAY}Identifica quién tiene DMARC/SPF mal configurado.${NC}"
+    echo -e "  ${GRAY}Score domains with checkdmarc. No Docker required.${NC}"
+    echo -e "  ${GRAY}Identifies which domains have DMARC/SPF misconfigured.${NC}"
     echo ""
-    echo -e "  ${WHITE}./crowsnest.sh report${NC}  ${GRAY}[dominio] [\"Nombre\"]${NC}"
-    echo -e "  ${GRAY}Genera el informe resumido y el detallado desde un escaneo Docker.${NC}"
-    echo -e "  ${GRAY}El marco de cumplimiento se elige en config/compliance/.${NC}"
+    echo -e "  ${WHITE}./crowsnest.sh report${NC}  ${GRAY}[domain] [\"Name\"]${NC}"
+    echo -e "  ${GRAY}Full containerised scan → summary + detailed report JSON.${NC}"
+    echo -e "  ${GRAY}The compliance framework is selected in config/compliance/.${NC}"
     echo ""
     echo -e "  ${WHITE}./crowsnest.sh diagnostico${NC}"
-    echo -e "  ${GRAY}Regenera solo el PDF de diagnóstico desde la sesión más reciente.${NC}"
-    echo -e "  ${GRAY}Sin nuevo escaneo — reutiliza los artefactos de la sesión.${NC}"
+    echo -e "  ${GRAY}Re-renders the detailed report PDF from the latest session.${NC}"
+    echo -e "  ${GRAY}No new scan — reuses the session artefacts.${NC}"
     echo ""
     echo -e "  ${WHITE}./crowsnest.sh trabajo${NC}"
-    echo -e "  ${GRAY}Pipeline completo sobre un objetivo autorizado (~35 min).${NC}"
-    echo -e "  ${GRAY}Requiere autorización firmada. Genera informe técnico PDF.${NC}"
+    echo -e "  ${GRAY}Full pipeline against an authorised target (~35 min).${NC}"
+    echo -e "  ${GRAY}Requires written authorisation. Produces the remediation PDF.${NC}"
     echo ""
-    echo -e "  ${WHITE}./crowsnest.sh batch${NC}  ${GRAY}[ruta/lista.txt]${NC}"
-    echo -e "  ${GRAY}Procesa la lista de targets prioritarios en paralelo (hasta 5 workers).${NC}"
-    echo -e "  ${GRAY}Lee el archivo más reciente de targets/ o acepta ruta como argumento.${NC}"
-    echo -e "  ${GRAY}Genera el informe resumido y el detallado de cada dominio.${NC}"
+    echo -e "  ${WHITE}./crowsnest.sh batch${NC}  ${GRAY}[path/list.txt]${NC}"
+    echo -e "  ${GRAY}Scans a domain list in parallel (up to 5 workers).${NC}"
+    echo -e "  ${GRAY}Uses the newest file in targets/ or a path given as argument.${NC}"
+    echo -e "  ${GRAY}Produces the summary and detailed report for each domain.${NC}"
     echo ""
     echo -e "  ${WHITE}./crowsnest.sh webapp${NC}"
-    echo -e "  ${GRAY}Inicia la interfaz web Flask en http://0.0.0.0:5000${NC}"
-    echo -e "  ${GRAY}Gestiona targets, lanza comandos y ve el output en tiempo real.${NC}"
+    echo -e "  ${GRAY}Starts the Flask dashboard on http://0.0.0.0:5000${NC}"
+    echo -e "  ${GRAY}Manage targets, launch commands, watch output live.${NC}"
     echo ""
-    echo -e "  ${GRAY}Próximamente: ./crowsnest.sh monitoreo${NC}"
+    echo -e "  ${GRAY}Planned: ./crowsnest.sh monitoreo${NC}"
     echo ""
 }
 
@@ -1238,7 +1238,7 @@ case "${1:-help}" in
             enriquecer) cmd_targets_enriquecer "${@:3}" ;;
             *)
                 error "Subcomando desconocido: 'targets ${2:-}'"
-                echo -e "  Uso: ${GRAY}./crowsnest.sh targets enriquecer [archivo]${NC}"
+                echo -e "  Usage: ${GRAY}./crowsnest.sh targets enriquecer [archivo]${NC}"
                 exit 1 ;;
         esac ;;
     recon)       cmd_recon ;;

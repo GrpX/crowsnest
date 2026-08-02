@@ -21,78 +21,86 @@
     <!-- ── SIDEBAR ─────────────────────────────────────────── -->
     <aside class="arsenal-sidebar">
 
-      <!-- [01] RECON -->
+      <!-- [01] ENRICHMENT -->
       <div class="tool-group">
-        <h3>[01] RECON</h3>
+        <h3>[01] ENRICHMENT</h3>
 
-        <div class="cmd-item" data-form="form-enriquecer" onclick="toggleCmd('form-enriquecer')">
-          &gt; ENRIQUECER TARGETS
+        <div class="cmd-item" data-form="form-enrich" onclick="toggleCmd('form-enrich')">
+          &gt; ENRICH TARGETS
         </div>
-        <div class="cmd-form" id="form-enriquecer">
-          <button class="cmd-execute" onclick="runCommand('batch', {}, this)">
-            EJECUTAR ENRIQUECIMIENTO
+        <div class="cmd-form" id="form-enrich">
+          <div class="cmd-note">LLM agents over a domain list &middot; optional stage</div>
+          <select class="cmd-input" id="sel-enrich-file">
+            <option value="">— loading lists… —</option>
+          </select>
+          <button class="cmd-execute" onclick="runEnrich(this)">
+            RUN ENRICHMENT
           </button>
         </div>
 
       </div>
 
-      <!-- [02] INFORMES -->
+      <!-- [02] REPORTS -->
       <div class="tool-group">
-        <h3>[02] INFORMES</h3>
+        <h3>[02] REPORTS</h3>
 
         <div class="cmd-item" data-form="form-report" onclick="toggleCmd('form-report')">
-          &gt; REPORT
+          &gt; SCAN
         </div>
         <div class="cmd-form" id="form-report">
-          <input class="cmd-input" id="report-dominio" type="text" placeholder="dominio.cl">
-          <input class="cmd-input" id="report-nombre" type="text" placeholder="Nombre del target">
+          <div class="cmd-note">Full scan &rarr; summary + detailed</div>
+          <input class="cmd-input" id="report-dominio" type="text" placeholder="example.com">
+          <input class="cmd-input" id="report-nombre" type="text" placeholder="Target name">
           <button class="cmd-execute" onclick="runReport(this)">
-            EJECUTAR REPORT
+            RUN SCAN
           </button>
         </div>
 
         <div class="cmd-item" data-form="form-diagnostico" onclick="toggleCmd('form-diagnostico')">
-          &gt; DIAGNÓSTICO
+          &gt; RE-RENDER
         </div>
         <div class="cmd-form" id="form-diagnostico">
+          <div class="cmd-note">Detailed report from an existing session &middot; no new scan</div>
           <select class="cmd-input" id="sel-sesiones">
-            <option value="">— cargando sesiones... —</option>
+            <option value="">— loading sessions… —</option>
           </select>
           <button class="cmd-execute" onclick="runDiagnostico(this)">
-            EJECUTAR DIAGNÓSTICO
+            RE-RENDER DETAILED
           </button>
         </div>
 
         <div class="cmd-item" data-form="form-trabajo" onclick="toggleCmd('form-trabajo')">
-          &gt; TRABAJO
+          &gt; REMEDIATION
         </div>
         <div class="cmd-form" id="form-trabajo">
-          <input class="cmd-input" id="trabajo-dominio" type="text" placeholder="ejemplo.cl">
-          <input class="cmd-input" id="trabajo-cliente" type="text" placeholder="Nombre del target">
+          <div class="cmd-note">Authorised full pipeline &rarr; remediation</div>
+          <input class="cmd-input" id="trabajo-dominio" type="text" placeholder="example.com">
+          <input class="cmd-input" id="trabajo-cliente" type="text" placeholder="Target name">
           <input class="cmd-input" id="trabajo-auth" type="text" placeholder="AUTH-2026-001">
           <button class="cmd-execute" onclick="runTrabajo(this)">
-            EJECUTAR TRABAJO
+            RUN REMEDIATION
           </button>
         </div>
       </div>
 
-      <!-- [03] OPERACIONES -->
+      <!-- [03] OPERATIONS -->
       <div class="tool-group">
-        <h3>[03] OPERACIONES</h3>
+        <h3>[03] OPERATIONS</h3>
 
         <div class="cmd-item" data-form="form-batch" onclick="toggleCmd('form-batch')">
-          &gt; BATCH PROCESS
+          &gt; BATCH SCAN
         </div>
         <div class="cmd-form" id="form-batch">
+          <div class="cmd-note">Scan every domain in a list, in parallel</div>
           <select class="cmd-input" id="sel-targets">
-            <option value="">— cargando archivos... —</option>
+            <option value="">— loading lists… —</option>
           </select>
           <label class="cmd-label">WORKERS: <span id="workers-val">3</span></label>
           <input class="cmd-input cmd-range" type="range" id="batch-workers"
             min="1" max="5" value="3"
             oninput="document.getElementById('workers-val').textContent = this.value">
           <button class="cmd-execute" onclick="runBatch(this)">
-            EJECUTAR BATCH
+            RUN BATCH
           </button>
         </div>
 
@@ -102,7 +110,7 @@
       <div class="tool-group">
         <h3>RECENT_JOBS</h3>
         <ul class="job-list" id="job-list">
-          <li style="color:var(--text-dim)">Sin jobs activos</li>
+          <li style="color:var(--text-dim)">No active jobs</li>
         </ul>
       </div>
 
@@ -140,7 +148,7 @@
           <tbody id="targets-body">
             <tr>
               <td colspan="6" style="text-align:center;color:var(--text-dim);padding:24px">
-                INITIALIZING...
+                INITIALIZING…
               </td>
             </tr>
           </tbody>
@@ -154,7 +162,7 @@
   <footer class="terminal-output">
     <div class="term-header">CONSOLA_DE_SALIDA{% if revision %} :: {{ revision }}{% endif %}</div>
     <div class="term-body" id="output-content">
-      <p>&gt; initializing crowsnest...</p>
+      <p>&gt; initializing crowsnest…</p>
     </div>
   </footer>
 

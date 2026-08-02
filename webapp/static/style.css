@@ -189,6 +189,17 @@ select.cmd-input {
   margin-bottom: 4px;
 }
 
+/* Subtitulo del comando: dice que produce, ya que la etiqueta nombra la
+   operacion y no el tipo de informe. */
+.cmd-note {
+  color: var(--text-dim);
+  font-size: 9px;
+  line-height: 1.5;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  opacity: 0.75;
+}
+
 .cmd-execute {
   width: 100%;
   background: transparent;
