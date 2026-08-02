@@ -152,7 +152,7 @@
 
   <!-- ── TERMINAL FOOTER ───────────────────────────────────── -->
   <footer class="terminal-output">
-    <div class="term-header">CONSOLA_DE_SALIDA :: CROWSNEST_v1.0</div>
+    <div class="term-header">CONSOLA_DE_SALIDA{% if revision %} :: {{ revision }}{% endif %}</div>
     <div class="term-body" id="output-content">
       <p>&gt; initializing crowsnest...</p>
     </div>

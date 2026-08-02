@@ -1,181 +1,198 @@
 # OpenClaw Orchestrator
 
-Módulo de enriquecimiento de prospectos de **S.I.N.S.** (SINS Is Not Static SpA).
-
-Toma un JSON de **Google Places** y devuelve prospectos PYME enriquecidos
-mediante una cadena de **3 agentes Ollama** locales, con scraping de los sitios
-web vía **Crawl4AI**.
+The LLM agent layer of Crowsnest. It takes a list of target domains, scrapes
+each site with Crawl4AI, and runs three agents over the result to enrich the
+target record and draft the report's executive summary.
 
 ```
-Google Places JSON  ──►  [orquestador] ──► [descubridor] ──► [redactor]  ──►  prospectos enriquecidos
-                              triage          scraping +          mensaje
-                                              extracción          de abordaje
+domains.txt ──► [orquestador] ──► [descubridor] ──► [summarizer] ──► enriched targets
+                    triage          scrape +          executive
+                                    extraction         summary
 ```
 
-## Arquitectura de agentes
+This layer is **optional**. If no LLM endpoint is reachable, the recon and
+report stages still run — the report is simply generated without its
+narrative summary.
 
-| Agente        | Modelo Ollama | Rol |
-|---------------|---------------|-----|
-| `orquestador` | `qwen2.5:7b`  | Triage del negocio: ¿es una PYME viable? Define sector, cargo objetivo y ángulo de abordaje. |
-| `descubridor` | `qwen2.5:7b`  | Extrae dominio, email de contacto y cargo objetivo desde el contenido del sitio web. |
-| `redactor`    | `llama3.1:8b` | Redacta el mensaje de contacto en frío en español de Chile. |
+## The backend is swappable
 
-`qwen2.5:7b` se usa donde importa el seguimiento estricto de instrucciones y la
-salida JSON; `llama3.1:8b` para la redacción en prosa. Los modelos, prompts y
-temperaturas se ajustan en [`config.json`](config.json).
+No model name exists anywhere in the code. Each agent resolves its model at
+runtime, in this order:
 
-## Salida
+1. `CROWSNEST_MODEL_<AGENT>` — e.g. `CROWSNEST_MODEL_SUMMARIZER`
+2. `CROWSNEST_MODEL` — applies to every agent
+3. the `model` field of that agent in [`config.json`](config.json)
 
-Lista JSON ordenada por confianza descendente. Cada prospecto:
+If an agent resolves to nothing, startup fails with a configuration error
+rather than a confusing runtime one.
+
+The endpoint follows the same principle:
+
+1. `LLM_BASE_URL`
+2. `OLLAMA_HOST`
+3. `llm.base_url` in [`config.json`](config.json)
+
+There is no hardcoded localhost fallback. With none of the three set, the
+client refuses to construct — guessing an endpoint turns a config mistake
+into a network timeout halfway through a batch.
+
+Local models age quickly, so nothing here commits to one. Point
+`LLM_BASE_URL` at any Ollama-compatible server and set the model names in
+config; the pipeline neither knows nor cares which models they are.
+
+## Agents
+
+| Agent | Role | Output format |
+|---|---|---|
+| `orquestador` | Triage: is the target analysable, what is the angle | JSON |
+| `descubridor` | Extracts domain and published contact addresses from the site | JSON |
+| `summarizer` | Writes the report's executive summary in English from the findings | text |
+
+Models, prompts, temperatures and token budgets all live in
+[`config.json`](config.json). Adding or retuning an agent is a config edit.
+
+## Output
+
+A JSON list ordered by descending confidence. One entry per target:
 
 ```json
 {
-  "empresa": "Clínica Dental Sonríe",
-  "dominio": "clinicasonrie.cl",
-  "cargo_objetivo": "Gerente General",
-  "email": "contacto@clinicasonrie.cl",
-  "mensaje": "Estimado/a Gerente General...",
+  "name": "example.com",
+  "dominio": "example.com",
+  "email": "contact@example.com",
+  "emails_encontrados": ["contact@example.com"],
+  "summary": "The assessment of example.com revealed …",
+  "summary_status": "ok",
   "confianza": 0.85
 }
 ```
 
-`confianza` (0.0–1.0) es una métrica **objetiva** según señales concretas:
-dominio encontrado (+0.30), sitio scrapeado con Crawl4AI (+0.25) o con el
-fallback requests (+0.15), email válido hallado en el sitio (+0.25) y cargo
-objetivo específico (+0.20). Si el orquestador marca el negocio como no viable,
-la confianza se reduce a la mitad.
+`confianza` (0.0–1.0) is computed from concrete signals, not from the model:
+domain resolved (+0.30), site scraped with Crawl4AI (+0.25) or the requests
+fallback (+0.15), a valid address found on the site (+0.25), a specific
+target role identified (+0.20). If the orquestador marks the target as not
+viable, the score is halved.
 
-## Requisitos previos
+`summary_status` is one of `ok`, `retry_ok`, `failed` or `not_requested`.
+These are **not** target lifecycle states — those live in `lib/states.py` and
+are unrelated.
 
-**Hardware mínimo:** 16 GB de RAM — los dos modelos se ejecutan localmente vía
-Ollama. En disco ocupan **~9 GB combinados** (`qwen2.5:7b` ~4.7 GB +
-`llama3.1:8b` ~4.9 GB).
+## Prerequisites
 
-1. **Ollama** corriendo en el host:
-   ```bash
-   ollama serve            # si no está como servicio
-   ```
-2. **Modelos descargados** (~9 GB combinados en disco):
-   ```bash
-   ollama pull qwen2.5:7b && ollama pull llama3.1:8b
-   ```
-3. **Dependencias Python** (solo si se ejecuta fuera del contenedor):
-   ```bash
-   pip install -r openclaw/requirements.txt
-   crawl4ai-setup          # descarga el navegador headless de Crawl4AI
-   ```
-
-El contenedor Docker `sins-workstation-ciber-workstation` ya trae el cliente
-Ollama, Crawl4AI y el navegador headless (ver [`../Dockerfile`](../Dockerfile)).
-
-## Uso
-
-### Vía `sins.sh` (recomendado)
+Whatever your backend needs. For a local Ollama server:
 
 ```bash
-./sins.sh prospectos enriquecer reportes/google_places.json
+ollama serve                       # if not already running as a service
+ollama pull <model>                # the models named in config.json
 ```
 
-Sin argumento, busca el `google_places*.json` más reciente en `targets/` o
-`reportes/`. La salida se guarda en `reportes/prospectos_enriquecidos_<fecha>.json`.
+Running 7–8B models locally wants roughly 16 GB of RAM and a few GB of disk
+per model. A remote endpoint has no such requirement on this machine.
 
-`sins.sh` ejecuta el batch **dentro del contenedor Docker** si la imagen está
-construida (trae Crawl4AI + cliente Ollama); si no, cae al Python del host.
-
-### Directo
+Python dependencies, only when running outside the container:
 
 ```bash
-python3 openclaw/run_batch.py --input google_places.json --output prospectos.json
-cat google_places.json | python3 openclaw/run_batch.py
+pip install -r openclaw/requirements.txt
+crawl4ai-setup                     # fetches Crawl4AI's headless browser
 ```
 
-Opciones: `--config`, `--limit N`, `--skip-preflight`. El log va a `stderr`;
-sin `--output`, el JSON se escribe en `stdout` (apto para piping).
+The `crowsnest:latest` image already ships the client, Crawl4AI and the
+headless browser — see [`../Dockerfile`](../Dockerfile).
 
-## Preflight y tests
+## Usage
 
-Antes de cada batch, `run_batch.py` ejecuta un **preflight** que verifica que
-Ollama responda y que `qwen2.5:7b` y `llama3.1:8b` estén disponibles. Si falta
-un modelo, aborta con código de salida `2` y la instrucción `ollama pull` exacta.
-
-Los tests verifican lo mismo de forma independiente:
+### Through `crowsnest.sh` (recommended)
 
 ```bash
-pytest openclaw/tests/                      # con pytest
-python3 openclaw/tests/test_models.py       # sin pytest (runner propio)
+./crowsnest.sh targets enriquecer targets/domains.txt
 ```
 
-Los tests de configuración siempre corren. Los de Ollama se **saltan** si el
-servidor no responde y **fallan** si responde pero falta algún modelo.
+Without an argument it uses `targets/domains.txt`. Output is written to
+`reportes/targets_enriquecidos_<date>.json`.
 
-## Configuración por entorno
+The wrapper runs the batch **inside the container** when the image is built,
+and falls back to the host Python otherwise.
 
-El módulo se ejecuta dentro del contenedor Docker de S.I.N.S. La diferencia
-entre entornos está en el montaje de volúmenes y el binario de Docker.
-`sins.sh prospectos enriquecer` **detecta el entorno automáticamente**
-(`/proc/version`) y aplica lo correcto.
+### Directly
 
-### Fedora KDE (SELinux)
+```bash
+python3 openclaw/run_batch.py --input targets/domains.txt --output enriched.json
+cat targets/domains.txt | python3 openclaw/run_batch.py
+```
 
-SELinux exige el sufijo `:z` en los volúmenes para que el contenedor pueda
-leerlos. `sins.sh` lo añade solo. Para ejecutar `run_batch.py` a mano:
+The input is plain text: one domain per line, `#` comments a line, duplicates
+and URL forms are normalised away.
+
+Options: `--config`, `--limit N`, `--skip-preflight`, `--no-summary`,
+`--no-db-sync`, `--include-discarded`. Logs go to `stderr`; without
+`--output` the JSON goes to `stdout`, so it pipes.
+
+## Preflight and tests
+
+Before each batch, `run_batch.py` runs a preflight that checks the backend
+responds and that every model declared by an agent is available there. A
+missing model aborts with exit code `2`, naming it.
+
+```bash
+pytest openclaw/tests/                      # with pytest
+python3 openclaw/tests/test_models.py       # standalone runner
+```
+
+The tests know no model names. They assert that every agent resolves to
+*some* model, that the environment can override both model and endpoint, and
+that whatever is declared exists in the configured backend. Configuration
+tests always run; backend tests **skip** when nothing is reachable and
+**fail** only when the backend answers and a declared model is absent.
+
+## Environment differences
+
+`crowsnest.sh targets enriquecer` detects the environment from `/proc/version`
+and adjusts volume mounts and the Docker binary automatically.
+
+**SELinux hosts (Fedora)** need the `:z` suffix on mounts. Run by hand:
 
 ```bash
 docker run --rm --network host \
-  -e OLLAMA_HOST=http://localhost:11434 \
+  -e LLM_BASE_URL=http://localhost:11434 \
   -v "$PWD/openclaw:/home/work/openclaw:z" \
   -v "$PWD/reportes:/home/work/results:z" \
-  -v "$PWD/reportes/google_places.json:/home/work/input/places.json:ro,z" \
-  sins-workstation-ciber-workstation \
+  -v "$PWD/targets/domains.txt:/home/work/input/domains.txt:ro,z" \
+  crowsnest:latest \
   python3 /home/work/openclaw/run_batch.py \
-    --input /home/work/input/places.json \
-    --output /home/work/results/prospectos_enriquecidos.json
+    --input /home/work/input/domains.txt \
+    --output /home/work/results/targets_enriquecidos.json
 ```
 
-`--network host` permite que el contenedor alcance Ollama en `localhost:11434`.
+`--network host` lets the container reach a backend on the host's localhost.
 
-### Windows 11 + WSL2
-
-WSL2 **no usa SELinux**: se omite el sufijo `:z`. Docker normalmente requiere
-`sudo`. `sins.sh` detecta WSL2 y usa `sudo docker` sin `:z` automáticamente.
-Para forzar el binario manualmente:
+**WSL2** does not use SELinux, so drop `:z`; Docker there usually needs
+`sudo`. Both are handled automatically, or force it:
 
 ```bash
-DOCKER_BIN="sudo docker" ./sins.sh prospectos enriquecer reportes/google_places.json
+DOCKER_BIN="sudo docker" ./crowsnest.sh targets enriquecer targets/domains.txt
 ```
 
-A mano, la misma orden que en Fedora pero con `sudo docker` y sin `:z`:
+## Environment variables
 
-```bash
-sudo docker run --rm --network host \
-  -e OLLAMA_HOST=http://localhost:11434 \
-  -v "$PWD/openclaw:/home/work/openclaw" \
-  -v "$PWD/reportes:/home/work/results" \
-  -v "$PWD/reportes/google_places.json:/home/work/input/places.json:ro" \
-  sins-workstation-ciber-workstation \
-  python3 /home/work/openclaw/run_batch.py \
-    --input /home/work/input/places.json \
-    --output /home/work/results/prospectos_enriquecidos.json
-```
+| Variable | Purpose |
+|---|---|
+| `LLM_BASE_URL` | Backend endpoint. Takes precedence over everything else. |
+| `OLLAMA_HOST` | Same, kept for compatibility with the Ollama convention. |
+| `CROWSNEST_MODEL_<AGENT>` | Override one agent's model. |
+| `CROWSNEST_MODEL` | Override every agent's model. |
+| `CROWSNEST_TARGETS_DB` | Path to the target database for the write-back step. |
+| `CROWSNEST_REPORTS_DIR` | Where results are written. |
+| `DOCKER_BIN` | Docker invocation used by `crowsnest.sh`. |
 
-Ollama instalado dentro de la distro WSL2 escucha en `localhost:11434`; con
-`--network host` el contenedor lo alcanza sin configuración extra.
-
-## Variables de entorno
-
-| Variable      | Por defecto                  | Uso |
-|---------------|------------------------------|-----|
-| `OLLAMA_HOST` | `http://localhost:11434`     | Sobreescribe el host de Ollama de `config.json`. |
-| `DOCKER_BIN`  | `docker` / `sudo docker` (WSL2) | Binario de Docker que usa `sins.sh`. |
-
-## Archivos
+## Files
 
 ```
 openclaw/
-├── config.json          # agentes, modelos, parámetros de Crawl4AI y batch
-├── run_batch.py          # orquestador (preflight + pipeline + I/O)
-├── requirements.txt      # dependencias Python
-├── README.md             # este archivo
+├── config.json          agents, models, endpoint, Crawl4AI and batch settings
+├── run_batch.py         orchestrator: preflight, pipeline, I/O
+├── enrich_targets.py    backfills scan_data into the target database
+├── requirements.txt
+├── README.md            this file
 └── tests/
-    └── test_models.py    # verifica config y disponibilidad de modelos
+    └── test_models.py   config coherence and backend availability
 ```

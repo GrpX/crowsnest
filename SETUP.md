@@ -1,181 +1,206 @@
-# S.I.N.S. — Guía de instalación
-## Fedora KDE (principal) y Windows 11 con WSL2
+# Setup
+
+Linux and WSL2. Native Windows is not supported: WeasyPrint depends on GTK
+libraries that are painful to obtain on Windows, and the recon container
+expects a Linux host. Under WSL2 everything runs inside the Linux
+filesystem, so the same instructions apply.
 
 ---
 
-## A. FEDORA KDE
+## 1. System dependencies
 
-### 1. Dependencias del sistema
+### Fedora
 
 ```bash
-# Docker
-sudo dnf install -y docker docker-compose
+sudo dnf install -y docker docker-compose python3 python3-pip
 sudo systemctl enable --now docker
-sudo usermod -aG docker $USER
-# Cierra sesión y vuelve a entrar para que el grupo tome efecto
-
-# Python y checkdmarc (para ./sins.sh captacion sin Docker)
-sudo dnf install -y python3 python3-pip
-pip install checkdmarc --user
-
-# Verificar
-checkdmarc --version
-docker --version
+sudo usermod -aG docker "$USER"      # log out and back in for the group to apply
 ```
 
-### 2. Clonar el proyecto
+### Debian / Ubuntu
 
 ```bash
-git clone https://github.com/tu-usuario/sins-workstation.git
-cd sins-workstation
-chmod +x sins.sh
+sudo apt update
+sudo apt install -y docker.io docker-compose-v2 python3 python3-pip
+sudo systemctl enable --now docker
+sudo usermod -aG docker "$USER"      # log out and back in
 ```
 
-### 3. Configurar variables de entorno
+### WSL2 (Windows 11)
 
-```bash
-cp .env.example .env
-nano .env   # Agrega tus API keys (Shodan, GitHub, etc.)
-```
-
-### 4. Construir el contenedor (una sola vez, ~10 min)
-
-```bash
-docker-compose build
-```
-
-### 5. Verificar que todo funciona
-
-```bash
-# Prueba de captación (sin Docker)
-./sins.sh captacion
-# Escribe: google.cl → debería dar score 0 (bien configurado)
-# Escribe: un dominio .cl que sepas que no tiene DMARC
-
-# Prueba de flash (con Docker)
-./sins.sh flash
-```
-
----
-
-## B. WINDOWS 11 CON WSL2
-
-### 1. Instalar WSL2 con Ubuntu 24.04
-
-Abre **PowerShell como Administrador** y ejecuta:
+Install the distro from an elevated PowerShell:
 
 ```powershell
 wsl --install -d Ubuntu-24.04
 ```
 
-Reinicia cuando lo pida. Al volver, Ubuntu se abre y pide crear usuario y contraseña.
+Then install Docker Desktop, tick **"Use WSL2 instead of Hyper-V"** during
+setup, and enable your distro under *Settings → Resources → WSL Integration*.
+Docker Desktop provides the daemon, so skip the `docker.io` package above and
+run only the Python part.
 
-### 2. Instalar Docker Desktop
+**Work inside the Linux filesystem** (`~/crowsnest`), never under `/mnt/c/`.
+Windows-mounted paths are slow and break container file permissions.
 
-- Descarga desde: https://www.docker.com/products/docker-desktop/
-- Durante la instalación, marca **"Use WSL2 instead of Hyper-V"**
-- Una vez instalado: Settings → Resources → WSL Integration → activa Ubuntu-24.04
+### checkdmarc
 
-### 3. Todo lo demás desde Ubuntu (WSL2)
-
-Abre Ubuntu desde el menú inicio y ejecuta exactamente los mismos comandos de Fedora, **excepto** el bloque de Docker (Docker Desktop lo maneja por ti):
+The `recon` command runs on the host without Docker, so it needs checkdmarc:
 
 ```bash
-# Python y checkdmarc
-sudo apt update && sudo apt install -y python3 python3-pip
-pip install checkdmarc --user --break-system-packages
+pip install --user checkdmarc            # Fedora
+pip install --user --break-system-packages checkdmarc   # Debian/Ubuntu/WSL2
 
-# Verificar Docker (debe responder sin sudo)
-docker --version
+checkdmarc --version
+```
 
-# Clonar proyecto
-git clone https://github.com/tu-usuario/sins-workstation.git
-cd sins-workstation
-chmod +x sins.sh
+---
 
-# Configurar .env
+## 2. Get the project
+
+```bash
+git clone <this-repo> crowsnest
+cd crowsnest
+chmod +x crowsnest.sh
+```
+
+## 3. Configure
+
+```bash
 cp .env.example .env
-nano .env
-
-# Construir contenedor
-docker-compose build
-
-# Probar
-./sins.sh captacion
+$EDITOR .env
 ```
 
-### Nota sobre archivos en WSL2
+Every key is optional. Without them the recon stage queries fewer sources;
+nothing fails.
 
-Trabaja **siempre dentro de WSL2** (`~/sins-workstation`), no en `/mnt/c/...`.
-Los archivos en `/mnt/c/` son lentos y Docker tiene problemas con los permisos.
-
-El PDF generado queda en `~/sins-workstation/reportes/`. Para abrirlo en Windows:
+Subfinder reads its providers from a separate file, which is git-ignored so
+your keys never end up in a commit:
 
 ```bash
-# Opción 1: abrir el explorador de Windows en la carpeta actual
+cp config/provider-config.example.yaml config/provider-config.yaml
+$EDITOR config/provider-config.yaml
+```
+
+### Environment variables
+
+| Variable | Purpose |
+|---|---|
+| `LLM_BASE_URL` | LLM endpoint. Falls back to `OLLAMA_HOST`, then `llm.base_url` in `openclaw/config.json`. |
+| `CROWSNEST_MODEL_<AGENT>` | Override one agent's model (`ORQUESTADOR`, `DESCUBRIDOR`, `SUMMARIZER`). |
+| `CROWSNEST_MODEL` | Override every agent's model at once. |
+| `CROWSNEST_COMPLIANCE_FRAMEWORK` | Active compliance framework id. |
+| `CROWSNEST_TARGETS_DB` | Path to the target database. Defaults to `db/targets.json`. |
+| `CROWSNEST_REPORTS_DIR` | Where reports are written. |
+| `CROWSNEST_WEBAPP_PASSWORD` | Dashboard password. Generated and written to `.env` if unset. |
+| `CROWSNEST_WEBAPP_SECRET_KEY` | Flask session key. Generated if unset. |
+| `DOCKER_BIN` | Docker invocation, e.g. `sudo docker` on a locked-down host. |
+
+## 4. Build the container
+
+```bash
+docker compose build     # ~10 min the first time
+```
+
+This produces the image `crowsnest:latest`. The name is pinned in
+`docker-compose.yml` so it does not depend on the directory name.
+
+## 5. Verify
+
+```bash
+./crowsnest.sh help
+
+mkdir -p targets
+printf 'example.com\n' > targets/domains.txt
+./crowsnest.sh recon                      # host-only, no Docker
+
+./crowsnest.sh report example.com "Example"   # containerised scan
+```
+
+If you also want the LLM enrichment stage, check the agent layer separately:
+
+```bash
+python3 openclaw/tests/test_models.py
+```
+
+The configuration tests always run. The backend tests **skip** — they do not
+fail — when no LLM endpoint is reachable, so a machine without one still
+gets a green suite.
+
+---
+
+## 6. Daily use
+
+```bash
+# 1. put the domains you are authorised to scan in a list
+$EDITOR targets/domains.txt        # one per line, '#' comments a line
+
+# 2. cheap pass: DMARC/SPF/TLS scoring, no container
+./crowsnest.sh recon
+
+# 3. full scan and report for one domain
+./crowsnest.sh report example.com "Example"
+
+# 4. or process the whole list in parallel
+./crowsnest.sh batch targets/domains.txt
+
+# 5. dashboard, with live log streaming
+./crowsnest.sh webapp        # http://0.0.0.0:5000
+```
+
+Reports land in `reportes/<domain>_<timestamp>/`. That directory is
+git-ignored.
+
+### Opening a report from WSL2
+
+```bash
 explorer.exe .
-
-# Opción 2: la ruta en Windows es:
-# \\wsl.localhost\Ubuntu-24.04\home\TU_USUARIO\sins-workstation\reportes\
+# or browse to:
+# \\wsl.localhost\Ubuntu-24.04\home\<user>\crowsnest\reportes\
 ```
 
 ---
 
-## C. FLUJO DE USO DIARIO
-
-### Calificar prospectos (Fedora o WSL2, sin Docker)
-
-```bash
-cd ~/sins-workstation
-./sins.sh captacion
-```
-
-El script pregunta si quieres analizar 1 dominio, varios, o un archivo.
-Para analizar una lista, ponla en `targets/prospectos.txt`, un dominio por línea:
+## 7. Layout
 
 ```
-estudiojuridico.cl
-clinicadental.cl
-contadores-asociados.cl
-# Las líneas con # se ignoran
-```
-
-### Generar informe flash (Docker debe estar corriendo)
-
-```bash
-./sins.sh flash
-```
-
-Si corriste captación antes, el script te muestra los prospectos calientes del día
-para elegir directamente. El PDF queda en `reportes/`.
-
----
-
-## D. ESTRUCTURA DE CARPETAS
-
-```
-sins-workstation/
-├── sins.sh                  ← EL único script que necesitas
-├── docker-compose.yml       ← Contenedor de captación
-├── docker-compose.work.yml  ← Stack APTRS (trabajo técnico, después)
+crowsnest/
+├── crowsnest.sh                 CLI entry point
+├── docker-compose.yml           builds crowsnest:latest
 ├── Dockerfile
-├── .env                     ← Tus API keys (no subir a Git)
-├── .env.example             ← Template seguro
-├── .gitignore
+├── .env                         your keys — git-ignored
+├── .env.example
+├── lib/                         states, branding, revision
+├── config/
+│   ├── compliance/              one file per compliance framework
+│   ├── config.yaml              subfinder flags
+│   ├── provider-config.example.yaml
+│   └── provider-config.yaml     your provider keys — git-ignored
 ├── scripts/
-│   ├── audit.sh             ← Corre dentro del contenedor
-│   ├── pipeline.sh          ← Fase de trabajo técnico (después)
-│   ├── nuclei_to_report.py  ← Convierte JSON → informe estructurado
-│   └── generate_pdf.py      ← Genera el PDF de S.I.N.S.
-├── targets/
-│   └── prospectos.txt       ← Lista de dominios a calificar
-├── reportes/                ← Todos los resultados (ignorado por Git)
-│   ├── captacion_FECHA.txt
-│   ├── prospectos_calientes_FECHA.txt
-│   └── dominio_cl_FECHA/
-│       ├── SINS_Flash_...pdf
-│       └── ...
-└── config/
-    └── subfinder/
-        └── provider-config.yaml
+│   ├── audit.sh                 recon, runs inside the container
+│   ├── nuclei_to_report.py      findings → report JSON
+│   └── generate_pdf.py          report JSON → PDF
+├── openclaw/                    LLM agent layer
+├── templates/                   report template + wordmark
+├── webapp/                      Flask dashboard
+├── examples/                    sample report and target schema
+├── targets/                     your domain lists — git-ignored
+├── db/                          target database — git-ignored
+└── reportes/                    scan output — git-ignored
 ```
+
+## Troubleshooting
+
+**`La imagen 'crowsnest:latest' no está construida`** — run
+`docker compose build`. The image name is pinned in `docker-compose.yml`; if
+an earlier build left images under a different name, `docker images` will
+show them and `docker rmi` removes them.
+
+**Docker needs sudo** — either add yourself to the `docker` group and
+re-login, or run with `DOCKER_BIN="sudo docker" ./crowsnest.sh ...`.
+
+**WeasyPrint fails to import** — the GTK/Pango libraries are missing.
+`sudo dnf install pango cairo` on Fedora, `sudo apt install libpango-1.0-0
+libpangoft2-1.0-0` on Debian/Ubuntu.
+
+**The report generates with no summary paragraph** — expected when no LLM
+backend is reachable. The narrative section is optional by design.
