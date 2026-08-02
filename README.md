@@ -8,6 +8,19 @@ streams every job's output live.
 Nothing it does touches the target: no exploitation, no authentication
 attempts, no traffic beyond what an ordinary visitor generates.
 
+## Background
+
+Crowsnest began as internal tooling at a small infosec company — the
+pipeline that took a domain from initial reconnaissance to a finished
+assessment report. That origin explains two things a general-purpose
+recon framework wouldn't carry: a report generator that produces
+client-ready documents instead of raw output, and a compliance mapping
+layer, because those reports had to speak the language of whatever
+regulation the reader answered to.
+
+The public version keeps the engineering and drops the business. What
+remains is the part that was interesting to build.
+
 ## Pipeline
 
 ```
@@ -67,9 +80,51 @@ which statute they cited. Making the mapping a config file collapsed them
 into one and removed the assumption that the reader's obligations are
 knowable from the code. Jurisdiction is an input here, not a scope.
 
+
 ## Design constraints — why passive-only
 
-<!-- TODO: passive-only rationale -->
+Crowsnest never touches the target. Every collection path resolves against
+public records, third-party indexes, and DNS — never against the target's
+own infrastructure. No port scans, no fuzzing, no authentication attempts,
+no takeover verification.
+
+This is a legal constraint expressed in architecture, not a gap in the
+tooling.
+
+Reconnaissance sits on either side of a line that most jurisdictions draw
+in similar terms: reading what is already published is not unauthorized
+access; probing a system to see how it responds usually is. Chile — where
+this pipeline was built — draws that line in Ley 21.459, and Ley 21.663
+art. 55 added a safe harbor for good-faith vulnerability research. The
+safe harbor is instructive precisely because of how narrow it is. It
+requires, among seven conditions, that the researcher be registered with
+the national cybersecurity agency, that the agency be notified in advance,
+that findings go to the system owner, and that nothing be published
+unilaterally. Its sixth condition is the decisive one: the exemption
+covers state systems. For everything else, the system owner's consent is
+required.
+
+No tool can satisfy those conditions on its operator's behalf. Consent is
+the hinge, and consent is not a runtime flag.
+
+So the boundary is drawn where it can actually be enforced — in what the
+code is capable of doing. A pipeline that cannot probe cannot be
+misconfigured into probing, and cannot be argued into it by an operator in
+a hurry. The cost is real: passive collection yields indicators, not
+confirmations. A finding here means an asset is exposed or a control is
+absent, never that a vulnerability was exploited. Reports are written to
+say exactly that.
+
+Operators with written authorization from the system owner are in a
+different position, and active verification is a legitimate next step for
+them. That step belongs in a different tool.
+
+[`docs/tooling-decisions.md`](docs/tooling-decisions.md) records where that
+line fell in practice: which reconnaissance tools were evaluated, which were
+rejected for requiring an authenticated session, and which was left out
+because it fingerprints the target's hosts rather than only reading public
+DNS. The constraint has already cost this pipeline a tool it wanted and
+reduced another to half its capability.
 
 ## Stack
 
@@ -143,6 +198,7 @@ openclaw/               LLM agent layer (see its README)
 templates/              report template + wordmark
 webapp/                 Flask dashboard, SSE log streaming
 examples/               sample report and target schema
+docs/                   tooling evaluation and design decisions
 ```
 
 ## What is not in this repository
