@@ -5,7 +5,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from flask import Blueprint, jsonify, request
 from flask_login import login_required
-
 from jobs import create_job
 
 bp = Blueprint("run", __name__)

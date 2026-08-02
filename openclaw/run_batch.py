@@ -55,6 +55,7 @@ if str(MODULE_DIR.parent) not in sys.path:
     sys.path.insert(0, str(MODULE_DIR.parent))
 from lib.states import QUEUED, SKIPPED  # noqa: E402
 
+
 # ─── COLORES / LOG ──────────────────────────────────────────────────────────
 # Todo el log va a stderr; stdout queda libre para el JSON de salida.
 def _c(code: str) -> str:
@@ -134,7 +135,7 @@ class OllamaClient:
                 self._pkg = None
 
     @classmethod
-    def from_config(cls, config: dict) -> "OllamaClient":
+    def from_config(cls, config: dict) -> OllamaClient:
         """Construye el cliente desde config + entorno.
 
         El endpoint no esta quemado en el codigo. Precedencia:
@@ -202,7 +203,7 @@ def _model_present(name: str, available) -> bool:
     return any(a == name or a.startswith(name) for a in available)
 
 
-def verify_models(config: dict, client: "OllamaClient | None" = None):
+def verify_models(config: dict, client: OllamaClient | None = None):
     """Verifica que Ollama responda y tenga los modelos requeridos.
 
     Devuelve (ok: bool, report: dict). `report` siempre incluye host,
@@ -1039,7 +1040,7 @@ def _finding_line(n: int, hallazgos: list) -> str:
 def build_summarizer_prompt(dominio: str, scan: dict) -> str:
     """Arma el prompt del summarizer con los hallazgos reales del scan."""
     hallazgos = scan.get("hallazgos", [])
-    lineas = [l for l in (_finding_line(i, hallazgos) for i in range(1, 6)) if l]
+    lineas = [ln for ln in (_finding_line(i, hallazgos) for i in range(1, 6)) if ln]
     return (
         "TARGET\n"
         f"- Domain: {dominio}\n"
@@ -1285,7 +1286,6 @@ async def enrich_one(idx: int, total: int, place: dict, agentes: dict,
 
     # 3.5 HALLAZGOS REALES — Flash JSON del dominio (o fallback DMARC/SPF).
     flash_data, flash_json_usado = load_hallazgos(dominio)
-    tipo = ""
 
     # 4. SUMMARIZER — resumen ejecutivo del informe, a partir de los hallazgos.
     # --no-summary: batches de solo enriquecimiento (dominio/email/MX) sin

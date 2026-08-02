@@ -129,7 +129,7 @@ def main():
         # Usa la sesion mas reciente que tenga un flash JSON valido
         # (ignora carpetas de scans incompletos/fallidos).
         flash = None
-        for ts, folder in matches:
+        for _ts, folder in matches:
             flash = load_flash(folder, dom_underscore)
             if flash is not None:
                 break
@@ -182,7 +182,7 @@ def main():
         for d in sorted(sin_sesion):
             print(f"  - {d}")
 
-    print(f"\nJSON valido: OK (json.load sin error)")
+    print("\nJSON valido: OK (json.load sin error)")
     print("=" * 60)
 
 

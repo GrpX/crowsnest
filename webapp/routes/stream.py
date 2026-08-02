@@ -6,7 +6,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from flask import Blueprint, Response, stream_with_context
 from flask_login import login_required
-
 from jobs import get_job
 
 bp = Blueprint("stream", __name__)

@@ -1,0 +1,37 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+exclude = [".git", "__pycache__", ".venv", "venv"]
+
+[tool.ruff.lint]
+# Conjunto explicito, no el de por defecto: el default de ruff cambia entre
+# versiones y el CI dejaria de ser reproducible.
+#   E,W  pycodestyle      F  pyflakes (nombres sin definir, imports sin usar)
+#   I    orden de imports B  bugbear (trampas comunes)
+#   UP   pyupgrade
+select = ["E", "W", "F", "I", "B", "UP"]
+ignore = [
+    # Los mensajes de consola y los prompts LLM son deliberadamente largos;
+    # cortarlos a 100 columnas los haria menos legibles, no mas.
+    "E501",
+    # El pipeline captura Exception a proposito en los limites de red y de
+    # subproceso: un fallo por target no debe tumbar el batch entero.
+    "B904",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Los tests importan run_batch tras manipular sys.path; E402 es inevitable.
+"openclaw/tests/*" = ["E402"]
+"tests/*" = ["E402"]
+# app.py carga el .env ANTES de importar Flask, para que las variables esten
+# definidas cuando los blueprints se evaluen. El orden es el punto.
+"webapp/app.py" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "openclaw/tests"]
+# -r a  muestra el motivo de cada skip/fail en el resumen final: los tests que
+# necesitan un backend LLM deben saltar de forma visible, nunca en silencio.
+addopts = "-v -r a --strict-markers"
+markers = [
+    "needs_llm: requiere un backend LLM alcanzable; salta si no lo hay",
+]

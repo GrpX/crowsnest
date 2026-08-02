@@ -32,10 +32,11 @@ if str(REPO_DIR) not in sys.path:
     sys.path.insert(0, str(REPO_DIR))
 
 from auth import SECRET_KEY, auth_bp, get_password, init_auth
+from routes import files_bp, run_bp, stream_bp, targets_bp
+
 from lib import states
 from lib.branding import logo_svg
 from lib.version import revision
-from routes import files_bp, run_bp, stream_bp, targets_bp
 
 app = Flask(__name__,
     template_folder=str(WEBAPP_DIR / "templates"),

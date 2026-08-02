@@ -12,8 +12,8 @@ Uso:
         --output reportes/SESION/informe.json
 """
 
-import json
 import argparse
+import json
 import os
 import sys
 from datetime import datetime
@@ -425,7 +425,6 @@ def parse_dmarc(dmarc_data: dict | None, finding_offset: int = 0):
     record = dmarc.get("record", "")
     valid  = dmarc.get("valid", False)
     policy = dmarc.get("tags", {}).get("p", {}).get("value", "none") if valid else None
-    rua    = dmarc.get("tags", {}).get("rua") if valid else None
 
     if not valid:
         email_findings.append({
@@ -484,8 +483,8 @@ def parse_dmarc(dmarc_data: dict | None, finding_offset: int = 0):
             idx=idx, name="DMARC con política p=quarantine (incompleto)", severity="medium",
             category="Seguridad de correo electrónico", host=domain,
             description=(
-                f"DMARC está configurado con p=quarantine, que mueve correos "
-                f"fraudulentos a spam pero no los bloquea definitivamente."
+                "DMARC está configurado con p=quarantine, que mueve correos "
+                "fraudulentos a spam pero no los bloquea definitivamente."
             ),
             recommendation="Escalar a p=reject para bloqueo total de suplantación.",
             references=["https://dmarc.org/overview/"],
@@ -495,7 +494,7 @@ def parse_dmarc(dmarc_data: dict | None, finding_offset: int = 0):
     else:
         email_findings.append({
             "component": "DMARC", "status": "ok",
-            "detail": f"DMARC configurado con p=reject",
+            "detail": "DMARC configurado con p=reject",
             "record": record, "risk": "Bajo",
         })
 
@@ -901,11 +900,16 @@ def calculate_risk_score(findings: list) -> dict:
             counts[sev] += 1
     score = min(100, total)
 
-    if   score >= 80: level = "Crítico"
-    elif score >= 50: level = "Alto"
-    elif score >= 25: level = "Medio"
-    elif score >  0:  level = "Bajo"
-    else:             level = "Sin hallazgos significativos"
+    if score >= 80:
+        level = "Crítico"
+    elif score >= 50:
+        level = "Alto"
+    elif score >= 25:
+        level = "Medio"
+    elif score > 0:
+        level = "Bajo"
+    else:
+        level = "Sin hallazgos significativos"
 
     return {"score": score, "level": level, "counts": counts}
 
@@ -954,9 +958,9 @@ def build_report(args, nuclei_findings, email_block, email_formal, technologies,
     business_impact = generate_impact_scenarios(dmarc_data, args.domain, args.client)
     key_rec = (
         "Se identificaron debilidades en la configuración de correo del dominio "
-        "@{domain} que permiten suplantar el remitente. Se recomienda implementar "
+        f"@{args.domain} que permiten suplantar el remitente. Se recomienda implementar "
         "DMARC con política p=reject como prioridad inmediata."
-        .format(domain=args.domain)
+
         if has_risk
         else "No se identificaron hallazgos de alto impacto en el escaneo de superficie."
     )
@@ -1031,12 +1035,12 @@ def main():
     nuclei_findings = parse_nuclei_findings(load_json_lines(Path(args.input)))
     print(f"[+] {len(nuclei_findings)} hallazgos de nuclei procesados")
 
-    print(f"[*] Analizando seguridad de correo...")
+    print("[*] Analizando seguridad de correo...")
     dmarc_data = load_json(Path(args.dmarc)) if args.dmarc else None
     email_block, email_formal = parse_dmarc(dmarc_data, finding_offset=0)
     print(f"[+] Estado de correo: {email_block['status']} — {len(email_formal)} hallazgos formales")
 
-    print(f"[*] Procesando tecnologías...")
+    print("[*] Procesando tecnologías...")
     tech_raw     = load_json(Path(args.tech)) if args.tech else None
     technologies = parse_technologies(tech_raw if isinstance(tech_raw, list) else [])
 

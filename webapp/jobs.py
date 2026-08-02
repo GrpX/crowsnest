@@ -100,7 +100,6 @@ def _build(cmd: str, params: dict) -> tuple[list, str | None]:
 
 
 def _run(job_id: str, cmd: str, params: dict):
-    job = _jobs[job_id]
     try:
         proc_args, stdin_data = _build(cmd, params)
         domain = params.get("dominio", params.get("target_file", ""))

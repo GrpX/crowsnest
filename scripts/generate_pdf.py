@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-import json, sys
+import json
+import sys
 from pathlib import Path
-from datetime import datetime
-from jinja2 import Environment, BaseLoader
-from weasyprint import HTML, CSS
+
+from jinja2 import BaseLoader, Environment
+from weasyprint import CSS, HTML
 from weasyprint.text.fonts import FontConfiguration
 
 TEMPLATE_NAME_ES = {
