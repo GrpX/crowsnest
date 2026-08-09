@@ -121,11 +121,14 @@ Three things are declared exactly once. Each was duplicated before and drifted.
   does **not** redeclare them: `webapp/app.py` passes them to the template,
   which publishes `window.TARGET_STATES` and renders the filter buttons in a
   Jinja loop. Adding a state means editing one file.
-- **`templates/crowsnest_logo.svg`** — the wordmark. `lib/branding.py` reads
-  it; `generate_pdf.py` takes the data URI, the webapp injects the raw
-  markup through a context processor. There is no embedded fallback copy on
-  purpose — a second declaration is what this replaced. A smoke test fails
-  if the wordmark's tagline appears in any other file.
+- **`templates/crowsnest_logo.svg`** (wordmark) and **`templates/crowsnest_mark.svg`**
+  (compact mark) — `lib/branding.py` reads both; `generate_pdf.py` takes the
+  data URIs, the webapp injects the raw wordmark markup through a context
+  processor and uses the mark's data URI as favicon. There is no embedded
+  fallback copy of either on purpose — a second declaration is what this
+  replaced. A smoke test derives a structural signature from each SVG at
+  run time (its longest `<path d>`, or its longest `<text>` if that's more
+  distinctive) and fails if that signature appears in any other file.
 - **`lib/version.py`** — the running revision, derived from git. There is no
   `VERSION` file and no tags, so any hardcoded version number would be
   fiction. Renders nothing outside a git checkout.

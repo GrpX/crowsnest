@@ -35,7 +35,7 @@ from auth import SECRET_KEY, auth_bp, get_password, init_auth
 from routes import files_bp, run_bp, stream_bp, targets_bp
 
 from lib import states
-from lib.branding import logo_svg
+from lib.branding import logo_svg, mark_data_uri
 from lib.version import revision
 
 app = Flask(__name__,
@@ -49,8 +49,13 @@ init_auth(app)
 
 @app.context_processor
 def inject_branding():
-    """El wordmark viene de templates/crowsnest_logo.svg — fuente unica."""
-    return {"logo_svg": logo_svg(), "revision": revision()}
+    """Wordmark y marca compacta vienen de templates/crowsnest_logo.svg y
+    templates/crowsnest_mark.svg — fuente unica de cada una."""
+    return {
+        "logo_svg": logo_svg(),
+        "favicon_data_uri": mark_data_uri(),
+        "revision": revision(),
+    }
 
 
 app.register_blueprint(auth_bp)

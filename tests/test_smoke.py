@@ -107,7 +107,7 @@ def test_branding_lee_el_svg_del_archivo():
     from lib import branding
     svg = branding.logo_svg()
     assert svg.startswith("<svg"), "el wordmark deberia venir del archivo SVG"
-    assert "CROWSNEST" in svg
+    assert "Crowsnest" in svg
 
 
 def test_branding_data_uri_es_base64_de_ese_mismo_svg():
@@ -121,27 +121,67 @@ def test_branding_data_uri_es_base64_de_ese_mismo_svg():
         "las dos formas deben salir del mismo archivo, no de copias distintas"
 
 
-def test_branding_no_trae_wordmark_embebido(tmp_path, monkeypatch):
+def test_branding_lee_la_marca_compacta_del_archivo():
+    from lib import branding
+    svg = branding.mark_svg()
+    assert svg.startswith("<svg"), "la marca compacta deberia venir del archivo SVG"
+
+
+def test_branding_data_uri_de_la_marca_es_base64_de_ese_mismo_svg():
+    import base64
+
+    from lib import branding
+    uri = branding.mark_data_uri()
+    assert uri.startswith("data:image/svg+xml;base64,")
+    crudo = base64.b64decode(uri.split(",", 1)[1]).decode()
+    assert crudo == branding.mark_svg(), \
+        "las dos formas deben salir del mismo archivo, no de copias distintas"
+
+
+@pytest.mark.parametrize("path_attr, svg_fn, uri_fn", [
+    ("LOGO_PATH", "logo_svg", "logo_data_uri"),
+    ("MARK_PATH", "mark_svg", "mark_data_uri"),
+])
+def test_branding_no_trae_copia_embebida(tmp_path, monkeypatch, path_attr, svg_fn, uri_fn):
     """Sin el archivo no hay copia de emergencia: devuelve vacio y avisa."""
     from lib import branding
-    monkeypatch.setattr(branding, "LOGO_PATH", tmp_path / "no-existe.svg")
-    monkeypatch.setattr(branding, "_warned", False)
-    assert branding.logo_svg() == ""
-    assert branding.logo_data_uri() == ""
+    monkeypatch.setattr(branding, path_attr, tmp_path / "no-existe.svg")
+    monkeypatch.setattr(branding, "_warned", set())
+    assert getattr(branding, svg_fn)() == ""
+    assert getattr(branding, uri_fn)() == ""
 
 
-def test_el_wordmark_se_declara_una_sola_vez():
-    """Ningun archivo del repo redeclara el wordmark fuera del SVG fuente.
-
-    La cadena buscada se lee del propio SVG en vez de escribirse aqui: un
-    literal en el test seria justo la cuarta copia que este test persigue.
+def _firma_estructural(svg: str) -> str:
+    """Cadena mas larga que identifica de forma unica a un SVG de marca:
+    el atributo `d` de <path> mas extenso, o el contenido del <text> mas
+    largo si resulta mas distintivo que cualquier `d`. Se deriva del
+    archivo en tiempo de ejecucion — nunca hardcodeada en el test, o el
+    test seria la segunda copia que existe para prevenir.
     """
     import re
 
+    candidatos = re.findall(r'\bd="([^"]+)"', svg)
+    candidatos += [t.strip() for t in re.findall(r"<text[^>]*>([^<]+)</text>", svg)]
+    assert candidatos, "el SVG no trae ni <path d=...> ni <text> del que derivar una firma"
+    return max(candidatos, key=len)
+
+
+@pytest.mark.parametrize("path_attr, svg_fn, hermano_attr", [
+    ("LOGO_PATH", "logo_svg", "MARK_PATH"),
+    ("MARK_PATH", "mark_svg", "LOGO_PATH"),
+])
+def test_la_marca_se_declara_una_sola_vez(path_attr, svg_fn, hermano_attr):
+    """Ningun archivo del repo redeclara wordmark o marca compacta fuera de su SVG fuente.
+
+    El artefacto hermano (wordmark <-> marca compacta) queda excluido: ambos
+    comparten el mismo glifo por diseno, eso no es la copia que este test
+    persigue.
+    """
     from lib import branding
-    textos = re.findall(r"<text[^>]*>([^<]+)</text>", branding.logo_svg())
-    tagline = max(textos, key=len).strip()
-    assert tagline, "el SVG del wordmark no declara texto"
+    fuente = getattr(branding, path_attr)
+    hermano = getattr(branding, hermano_attr)
+    firma = _firma_estructural(getattr(branding, svg_fn)())
+    assert firma, "no se pudo derivar una firma del SVG"
 
     otros = []
     for f in REPO_ROOT.rglob("*"):
@@ -149,14 +189,14 @@ def test_el_wordmark_se_declara_una_sola_vez():
             continue
         if f.suffix not in (".py", ".html", ".css", ".js", ".svg"):
             continue
-        if f in (branding.LOGO_PATH, Path(__file__)):
+        if f in (fuente, hermano, Path(__file__)):
             continue
         try:
-            if tagline in f.read_text(encoding="utf-8"):
+            if firma in f.read_text(encoding="utf-8"):
                 otros.append(str(f.relative_to(REPO_ROOT)))
         except UnicodeDecodeError:
             continue
-    assert not otros, f"el wordmark esta duplicado en: {otros}"
+    assert not otros, f"la marca esta duplicada en: {otros}"
 
 
 # ─── lib/version.py ─────────────────────────────────────────────────────────

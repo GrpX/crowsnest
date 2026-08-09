@@ -226,6 +226,10 @@ REMEDIATION_EFFORT = {
 
 EFFORT_ORDER = {"low": 0, "medium": 1, "high": 2}
 
+# Orden de severidad para la tabla de remediacion (las etiquetas de los
+# escenarios de negocio estan en espanol, a diferencia de SEVERITY_MAP).
+SEVERITY_ES_ORDER = {"Crítico": 0, "Alto": 1, "Medio": 2, "Bajo": 3}
+
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 def load_json_lines(path: Path) -> list:
     """Carga hallazgos desde JSONL o JSON array (nuclei -json-export usa array)."""
@@ -718,6 +722,7 @@ def generate_impact_scenarios(dmarc_data: dict | None, domain: str, client: str)
             "title":    "Suplantación de identidad por correo (BEC)",
             "severity": severity,
             "trigger":  trigger,
+            "asset":    domain,
             "description": (
                 f"{trigger_desc} Sin una política DMARC que instruya al receptor, un "
                 f"tercero puede enviar correo con el dominio {domain} en el remitente "
@@ -742,6 +747,7 @@ def generate_impact_scenarios(dmarc_data: dict | None, domain: str, client: str)
             "title":    "Ausencia de restricción de origen (SPF)",
             "severity": "Alto",
             "trigger":  "spf_absent",
+            "asset":    domain,
             "description": (
                 f"Sin registro SPF válido en {domain}, no existe una lista de servidores "
                 f"autorizados a enviar correo por el dominio. Cualquier servidor puede "
@@ -763,6 +769,7 @@ def generate_impact_scenarios(dmarc_data: dict | None, domain: str, client: str)
             "title":    "Restricción de origen permisiva (SPF ~all)",
             "severity": "Medio",
             "trigger":  "spf_softfail",
+            "asset":    domain,
             "description": (
                 f"El SPF de {domain} termina en ~all (softfail): el registro declara qué "
                 f"servidores son legítimos, pero indica al receptor que acepte igualmente "
@@ -787,6 +794,7 @@ def generate_impact_scenarios(dmarc_data: dict | None, domain: str, client: str)
                 "title":    f"Transporte de correo sin cifrar ({hostname})",
                 "severity": "Alto",
                 "trigger":  "tls_absent",
+                "asset":    hostname,
                 "description": (
                     f"El servidor de correo {hostname} no ofrece TLS ni STARTTLS. El "
                     f"correo entre servidores viaja en texto plano y puede ser leído o "
@@ -805,6 +813,8 @@ def generate_impact_scenarios(dmarc_data: dict | None, domain: str, client: str)
             break
 
     # ── Plan de remediación: esfuerzo, nunca precio ──────────────────────────
+    # Eje principal: severidad descendente. El esfuerzo va al final de la fila,
+    # no estructura el orden — esto es un documento tecnico, no un presupuesto.
     remediation_items = []
     triggers_vistos = set()
     for scenario in scenarios:
@@ -812,10 +822,13 @@ def generate_impact_scenarios(dmarc_data: dict | None, domain: str, client: str)
         if t and t in REMEDIATION_EFFORT and t not in triggers_vistos:
             item = REMEDIATION_EFFORT[t]
             remediation_items.append({
-                "label":  item["label"],
-                "effort": item["effort"],
+                "label":    item["label"],
+                "effort":   item["effort"],
+                "severity": scenario.get("severity", ""),
+                "asset":    scenario.get("asset", ""),
             })
             triggers_vistos.add(t)
+    remediation_items.sort(key=lambda i: SEVERITY_ES_ORDER.get(i["severity"], 99))
 
     # Esfuerzo agregado = el mayor de los items, no una suma.
     total_effort = None

@@ -44,11 +44,12 @@ def translate_finding_names(data: dict) -> dict:
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 
-# El wordmark tiene una sola fuente: templates/crowsnest_logo.svg via lib.branding.
+# El wordmark y la marca compacta tienen una sola fuente cada uno:
+# templates/crowsnest_logo.svg y templates/crowsnest_mark.svg via lib.branding.
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
-from lib.branding import logo_data_uri  # noqa: E402
+from lib.branding import logo_data_uri, mark_data_uri  # noqa: E402
 
 # Una sola plantilla. Lo que antes eran dos variantes de marco legal ahora se
 # resuelve con el framework de cumplimiento activo (config/compliance/), que el
@@ -86,6 +87,7 @@ if __name__ == "__main__":
     data = json.loads(Path(args.input).read_text(encoding="utf-8"))
     data = translate_finding_names(data)
     data["logo_b64"] = logo_data_uri()
+    data["mark_b64"] = mark_data_uri()
 
     data["EFFORT_LABEL"] = EFFORT_LABEL
 

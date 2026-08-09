@@ -28,6 +28,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--white);color:var(--black)
 .page:last-child{page-break-after:avoid}
 
 .ph{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:6mm 16mm 5mm;border-bottom:1px solid var(--g5)}
+.ph-brand-zone{display:flex;align-items:center;gap:2mm}
+.ph-mark{height:4mm;width:auto;display:block}
 .ph-brand{font-family:'DM Mono',monospace;font-size:7pt;letter-spacing:.18em;color:var(--g4);text-transform:uppercase}
 .ph-client{font-family:'DM Mono',monospace;font-size:7pt;color:var(--g3)}
 .ph-class{font-family:'DM Mono',monospace;font-size:6.5pt;letter-spacing:.15em;color:var(--red);text-transform:uppercase}
@@ -284,7 +286,10 @@ p{color:var(--g2);margin-bottom:3mm;line-height:1.65}
 <!-- RESUMEN EJECUTIVO -->
 <div class="page interior">
   <div class="ph">
+    <div class="ph-brand-zone">
+    {% if mark_b64 %}<img src="{{ mark_b64 }}" class="ph-mark" alt="Crowsnest">{% endif %}
     <span class="ph-brand">Crowsnest</span>
+    </div>
     <span class="ph-client">{{ client.name }} · {{ client.domain }}</span>
     <span class="ph-class">Confidencial</span>
   </div>
@@ -340,7 +345,10 @@ p{color:var(--g2);margin-bottom:3mm;line-height:1.65}
 {% if (report_type == 'detailed' or report_type == 'remediation') and business_impact and business_impact.scenarios %}
 <div class="page interior">
   <div class="ph">
+    <div class="ph-brand-zone">
+    {% if mark_b64 %}<img src="{{ mark_b64 }}" class="ph-mark" alt="Crowsnest">{% endif %}
     <span class="ph-brand">Crowsnest</span>
+    </div>
     <span class="ph-client">{{ client.name }} · {{ client.domain }}</span>
     <span class="ph-class">Confidencial</span>
   </div>
@@ -418,7 +426,10 @@ p{color:var(--g2);margin-bottom:3mm;line-height:1.65}
 {% if report_type != 'summary' and business_impact and business_impact.remediation_items %}
 <div class="page interior">
   <div class="ph">
+    <div class="ph-brand-zone">
+    {% if mark_b64 %}<img src="{{ mark_b64 }}" class="ph-mark" alt="Crowsnest">{% endif %}
     <span class="ph-brand">Crowsnest</span>
+    </div>
     <span class="ph-client">{{ client.name }} · {{ client.domain }}</span>
     <span class="ph-class">Confidencial</span>
   </div>
@@ -429,20 +440,27 @@ p{color:var(--g2);margin-bottom:3mm;line-height:1.65}
     <table class="remediation-table">
       <thead>
         <tr>
+          <th>Severidad</th>
           <th>Acción técnica</th>
+          <th>Activo</th>
           <th class="text-right">Esfuerzo</th>
         </tr>
       </thead>
       <tbody>
         {% for item in business_impact.remediation_items %}
+        {% set sevkey = 'critical' if item.severity == 'Crítico' else 'high' if item.severity == 'Alto' else 'medium' if item.severity == 'Medio' else 'low' %}
         <tr>
+          <td><span class="sev {{ sevkey }}">{{ item.severity }}</span></td>
           <td>{{ item.label }}</td>
+          <td>{{ item.asset }}</td>
           <td class="text-right"><span class="effort effort-{{ item.effort }}">{{ EFFORT_LABEL[item.effort] }}</span></td>
         </tr>
         {% endfor %}
         {% if business_impact.remediation_effort %}
         <tr class="total-row">
+          <td></td>
           <td><strong>Esfuerzo agregado</strong></td>
+          <td></td>
           <td class="text-right"><strong><span class="effort effort-{{ business_impact.remediation_effort }}">{{ EFFORT_LABEL[business_impact.remediation_effort] }}</span></strong></td>
         </tr>
         {% endif %}
@@ -476,7 +494,10 @@ p{color:var(--g2);margin-bottom:3mm;line-height:1.65}
 
 <div class="page interior">
   <div class="ph">
+    <div class="ph-brand-zone">
+    {% if mark_b64 %}<img src="{{ mark_b64 }}" class="ph-mark" alt="Crowsnest">{% endif %}
     <span class="ph-brand">Crowsnest</span>
+    </div>
     <span class="ph-client">{{ client.name }} · {{ client.domain }}</span>
     <span class="ph-class">Confidencial</span>
   </div>
@@ -570,7 +591,10 @@ p{color:var(--g2);margin-bottom:3mm;line-height:1.65}
   {% if ns.page_findings|length == 2 or loop.last %}
 <div class="page interior">
   <div class="ph">
+    <div class="ph-brand-zone">
+    {% if mark_b64 %}<img src="{{ mark_b64 }}" class="ph-mark" alt="Crowsnest">{% endif %}
     <span class="ph-brand">Crowsnest</span>
+    </div>
     <span class="ph-client">{{ client.name }} · {{ client.domain }}</span>
     <span class="ph-class">Confidencial</span>
   </div>
@@ -627,7 +651,10 @@ p{color:var(--g2);margin-bottom:3mm;line-height:1.65}
 {% set legal_section = '03' if report_type == 'summary' else ('06' if ((report_type == 'detailed' or report_type == 'remediation') and business_impact and business_impact.scenarios) else '04') %}
 <div class="page interior">
   <div class="ph">
+    <div class="ph-brand-zone">
+    {% if mark_b64 %}<img src="{{ mark_b64 }}" class="ph-mark" alt="Crowsnest">{% endif %}
     <span class="ph-brand">Crowsnest</span>
+    </div>
     <span class="ph-client">{{ client.name }} · {{ client.domain }}</span>
     <span class="ph-class">Confidencial</span>
   </div>
