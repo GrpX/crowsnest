@@ -1,5 +1,4 @@
 import logging
-import os
 import re
 import subprocess
 import sys
@@ -55,12 +54,6 @@ def get_all_jobs() -> list:
 def _append(job_id: str, line: str):
     with _lock:
         _jobs[job_id]["lines"].append(_strip(line))
-
-
-def _env() -> dict:
-    e = os.environ.copy()
-    e["CROWSNEST_BATCH_MODE"] = "1"
-    return e
 
 
 def _build(cmd: str, params: dict) -> tuple[list, str | None]:
@@ -120,7 +113,6 @@ def _run(job_id: str, cmd: str, params: dict):
             stderr=subprocess.STDOUT,
             text=True,
             cwd=str(REPO_DIR),
-            env=_env(),
         )
 
         if stdin_data:

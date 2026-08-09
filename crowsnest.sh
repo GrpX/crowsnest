@@ -1119,8 +1119,6 @@ cmd_batch() {
     local BATCH_LOG_DIR="${REPORTS_DIR}/batch_${BATCH_TS}_logs"
     mkdir -p "$BATCH_LOG_DIR"
 
-    export CROWSNEST_BATCH_MODE=1
-
     declare -a PIDS=()
     declare -a PID_IDX=()
     local completed=0 failed=0
@@ -1191,8 +1189,6 @@ cmd_batch() {
         PID_IDX=(); [[ ${#ni[@]} -gt 0 ]] && PID_IDX+=("${ni[@]}")
         [[ ${#PIDS[@]} -gt 0 ]] && sleep 2
     done
-
-    unset CROWSNEST_BATCH_MODE
 
     # ── Resumen ───────────────────────────────────────────────────────────────
     echo ""

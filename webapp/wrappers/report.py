@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Usage: report.py DOMINIO NOMBRE"""
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -17,11 +16,8 @@ if prioritarios:
 else:
     stdin = f"{dominio}\n{nombre}\ny\n"
 
-env = os.environ.copy()
-env["CROWSNEST_BATCH_MODE"] = "1"
-
 proc = subprocess.run(
     ["bash", CROWSNEST, "report"],
-    input=stdin, text=True, cwd=str(REPO_DIR), env=env,
+    input=stdin, text=True, cwd=str(REPO_DIR),
 )
 sys.exit(proc.returncode)

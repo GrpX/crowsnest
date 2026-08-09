@@ -13,8 +13,6 @@
 db/
 targets/
 reports/
-# nombre anterior del directorio, por si queda una carpeta local vieja
-reportes/
 results/
 
 # Configuraciones con API keys incrustadas.
