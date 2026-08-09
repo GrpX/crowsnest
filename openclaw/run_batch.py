@@ -409,7 +409,7 @@ def _cf_decoded_emails(html: str) -> list:
     Cloudflare oculta el email tras un <a> con el texto cifrado en hex: el
     primer byte es la clave XOR y el resto, los caracteres del email. Tambien
     aparece como fragmento en href="/cdn-cgi/l/email-protection#<hex>". Sin
-    decodificarlo, sitios como ejemplo.cl no exponen ningun email.
+    decodificarlo, sitios como ejemplo.example no exponen ningun email.
     """
     if not html:
         return []
@@ -797,26 +797,26 @@ def _clean_message(text: str) -> str:
 
 
 # ─── HALLAZGOS REALES DESDE EL FLASH JSON ───────────────────────────────────
-# Los informes Flash viven en reportes/<slug>_<YYYYMMDD>_<HHMMSS>/ y guardan el
+# Los informes Flash viven en reports/<slug>_<YYYYMMDD>_<HHMMSS>/ y guardan el
 # JSON flash_<slug>.json, donde <slug> es el dominio con los puntos convertidos
-# en guion bajo (ejemplo.cl -> ejemplo_cl).
+# en guion bajo (ejemplo.example -> ejemplo_example).
 def _resolve_reportes_dir() -> Path:
     """Carpeta de informes Flash, valida tanto en el host como en el contenedor.
 
-    En el host es <repo>/reportes/. En Docker, `crowsnest.sh batch` monta esa misma
+    En el host es <repo>/reports/. En Docker, `crowsnest.sh batch` monta esa misma
     carpeta en /home/work/results (ver los -v de crowsnest.sh), de modo que aqui se
-    ve como un hermano `results` de openclaw/, no `reportes`. Probamos ambos
+    ve como un hermano `results` de openclaw/, no `reports`. Probamos ambos
     nombres y devolvemos el primero que exista; CROWSNEST_REPORTS_DIR manda si
     esta definido.
     """
     env = os.environ.get("CROWSNEST_REPORTS_DIR")
     if env:
         return Path(env)
-    for nombre in ("reportes", "results"):
+    for nombre in ("reports", "results"):
         cand = MODULE_DIR.parent / nombre
         if cand.is_dir():
             return cand
-    return MODULE_DIR.parent / "reportes"
+    return MODULE_DIR.parent / "reports"
 
 
 REPORTES_DIR = _resolve_reportes_dir()
@@ -832,7 +832,7 @@ def _domain_slug(domain: str) -> str:
 def find_flash_json(domain: str, reportes_dir: Path = REPORTES_DIR):
     """Ruta al Flash JSON mas reciente de `domain`, o None si no existe.
 
-    Recorre reportes/<slug>_<YYYYMMDD>_<HHMMSS>/ y devuelve el flash_<slug>.json
+    Recorre reports/<slug>_<YYYYMMDD>_<HHMMSS>/ y devuelve el flash_<slug>.json
     de la carpeta con el timestamp mas alto.
     """
     slug = _domain_slug(domain)
@@ -1233,7 +1233,7 @@ async def enrich_one(idx: int, total: int, place: dict, agentes: dict,
             # confianza/email se encargará de bajar el score.
             warn(f"[{idx}/{total}] JS-SITE {empresa[:32]:<32} — intentando Crawl4AI...")
         elif not vivo:
-            warn(f"[{idx}/{total}] SKIP {empresa[:36]:<36} razón={razon}")
+            warn(f"[{idx}/{total}] SKIP {empresa[:36]:<36} reason={razon}")
             return {
                 "name": empresa,
                 "dominio": extract_domain(website) or "",
@@ -1478,7 +1478,7 @@ def read_input(path: str | None) -> str:
         data = sys.stdin.read()
         if data.strip():
             return data
-    error("No se indico entrada. Usa --input <dominios.txt> o pasa la lista por stdin.")
+    error("No input given. Use --input <domains.txt> or pipe the list via stdin.")
     sys.exit(1)
 
 
@@ -1488,53 +1488,53 @@ def print_summary(targets: list, config: dict) -> None:
     utiles = [p for p in targets if not p.get("descartado")]
     cmin = config.get("batch", {}).get("confianza_minima", 0.0)
     altos = [p for p in utiles if p.get("confianza", 0.0) >= cmin]
-    step("Resumen del enriquecimiento")
-    info(f"Targets procesados : {len(targets)}")
-    info(f"Descartados prefiltro : {len(descartados)}")
-    info(f"Migraciones detectadas: {sum(1 for p in targets if p.get('migracion_detectada'))}")
-    info(f"Confianza >= {cmin}      : {len(altos)}")
-    info(f"Con dominio           : {sum(1 for p in utiles if p['dominio'])}")
-    info(f"Con email             : {sum(1 for p in utiles if p['email'])}")
-    info(f"Email MX válido       : {sum(1 for p in utiles if p.get('email_mx_valido'))}")
-    info(f"Email score promedio  : {round(sum(p.get('email_quality', 0) for p in utiles if p.get('email')) / max(1, sum(1 for p in utiles if p.get('email'))), 1)}")
-    info(f"Con emails en sitio   : {sum(1 for p in utiles if p.get('emails_encontrados'))}")
-    info(f"Con Flash JSON real   : {sum(1 for p in utiles if p.get('flash_json_usado'))}")
+    step("Enrichment summary")
+    info(f"Targets processed     : {len(targets)}")
+    info(f"Discarded by prefilter: {len(descartados)}")
+    info(f"Migrations detected   : {sum(1 for p in targets if p.get('migracion_detectada'))}")
+    info(f"Confidence >= {cmin}       : {len(altos)}")
+    info(f"With domain           : {sum(1 for p in utiles if p['dominio'])}")
+    info(f"With email            : {sum(1 for p in utiles if p['email'])}")
+    info(f"Valid email MX        : {sum(1 for p in utiles if p.get('email_mx_valido'))}")
+    info(f"Average email score   : {round(sum(p.get('email_quality', 0) for p in utiles if p.get('email')) / max(1, sum(1 for p in utiles if p.get('email'))), 1)}")
+    info(f"With emails on site   : {sum(1 for p in utiles if p.get('emails_encontrados'))}")
+    info(f"With real Flash JSON  : {sum(1 for p in utiles if p.get('flash_json_usado'))}")
     estados = {}
     for p in utiles:
         estado = p.get("summary_status", "?")
         estados[estado] = estados.get(estado, 0) + 1
-    info("Estado del resumen    : "
+    info("Summary status        : "
          + ", ".join(f"{k}={v}" for k, v in sorted(estados.items())))
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
-        description="OpenClaw Orchestrator - enriquece una lista de dominios objetivo.")
+        description="OpenClaw Orchestrator - enriches a list of target domains.")
     ap.add_argument("input_pos", nargs="?",
-                    help="Lista de dominios objetivo, uno por linea (posicional).")
+                    help="Target domain list, one per line (positional).")
     ap.add_argument("-i", "--input",
-                    help="Lista de dominios objetivo, uno por linea. '#' comenta.")
-    ap.add_argument("-o", "--output", help="Archivo JSON de salida (si se omite, stdout).")
+                    help="Target domain list, one per line. '#' comments a line.")
+    ap.add_argument("-o", "--output", help="Output JSON file (stdout if omitted).")
     ap.add_argument("-c", "--config", default=str(DEFAULT_CONFIG),
-                    help="Ruta de config.json.")
+                    help="Path to config.json.")
     ap.add_argument("-n", "--limit", type=int, default=0,
-                    help="Procesar como maximo N targets.")
+                    help="Process at most N targets.")
     ap.add_argument("--skip-preflight", action="store_true",
-                    help="Omitir la verificacion de modelos Ollama.")
+                    help="Skip the Ollama model check.")
     ap.add_argument("--db",
-                    help="Ruta de db/targets.json donde persistir los emails "
-                         "(por defecto <repo>/db/targets.json o "
+                    help="Path to db/targets.json where emails are persisted "
+                         "(defaults to <repo>/db/targets.json or "
                          "CROWSNEST_TARGETS_DB).")
     ap.add_argument("--no-db-sync", action="store_true",
-                    help="No escribir los emails encontrados de vuelta a "
-                         "db/targets.json al terminar el batch.")
+                    help="Do not write found emails back to "
+                         "db/targets.json when the batch finishes.")
     ap.add_argument("--include-discarded", action="store_true",
-                    help="Incluir en la salida los dominios descartados por el "
-                         "prefiltro (por defecto solo se escriben los utiles).")
+                    help="Include domains discarded by the prefilter in the "
+                         "output (by default only the useful ones are written).")
     ap.add_argument("--no-summary", action="store_true",
-                    help="Omitir la etapa del summarizer. El campo summary queda "
-                         "en null y summary_status='not_requested'. Util para "
-                         "batches de solo enriquecimiento.")
+                    help="Skip the summarizer stage. The summary field stays "
+                         "null and summary_status='not_requested'. Useful for "
+                         "enrichment-only batches.")
     args = ap.parse_args(argv)
 
     try:
@@ -1556,7 +1556,7 @@ def main(argv=None) -> int:
     # Leer la lista de dominios objetivo (texto plano, uno por linea).
     places = parse_target_list(read_input(args.input or args.input_pos))
     if not places:
-        error("La lista de entrada no contiene dominios validos.")
+        error("The input list contains no valid domains.")
         return 1
 
     cap = int(config.get("batch", {}).get("max_targets", 60))

@@ -108,7 +108,7 @@ headless browser — see [`../Dockerfile`](../Dockerfile).
 ```
 
 Without an argument it uses `targets/domains.txt`. Output is written to
-`reportes/targets_enriquecidos_<date>.json`.
+`reports/targets_enriquecidos_<date>.json`.
 
 The wrapper runs the batch **inside the container** when the image is built,
 and falls back to the host Python otherwise.
@@ -155,7 +155,7 @@ and adjusts volume mounts and the Docker binary automatically.
 docker run --rm --network host \
   -e LLM_BASE_URL=http://localhost:11434 \
   -v "$PWD/openclaw:/home/work/openclaw:z" \
-  -v "$PWD/reportes:/home/work/results:z" \
+  -v "$PWD/reports:/home/work/results:z" \
   -v "$PWD/targets/domains.txt:/home/work/input/domains.txt:ro,z" \
   crowsnest:latest \
   python3 /home/work/openclaw/run_batch.py \

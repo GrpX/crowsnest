@@ -12,6 +12,8 @@
 # Datos reales de targets y resultados de escaneo — NUNCA en este repo
 db/
 targets/
+reports/
+# nombre anterior del directorio, por si queda una carpeta local vieja
 reportes/
 results/
 

@@ -20,7 +20,7 @@ NC='\033[0m'
 
 # ── PATHS ────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPORTES_DIR="${SCRIPT_DIR}/reportes"
+REPORTS_DIR="${SCRIPT_DIR}/reports"
 TARGETS_DIR="${SCRIPT_DIR}/targets"
 TARGETS_FILE="${TARGETS_DIR}/domains.txt"
 IMAGE_NAME="crowsnest:latest"
@@ -70,15 +70,15 @@ check_container_built() {
 
 score_color() {
     local score=$1
-    if   [[ $score -ge 80 ]]; then echo -e "${BRED}${score}/100 — Crítico${NC}"
-    elif [[ $score -ge 50 ]]; then echo -e "${YELLOW}${score}/100 — Alto${NC}"
-    elif [[ $score -ge 25 ]]; then echo -e "${YELLOW}${score}/100 — Medio${NC}"
-    elif [[ $score -gt 0  ]]; then echo -e "${GREEN}${score}/100 — Bajo${NC}"
-    else                           echo -e "${GRAY}0/100 — Sin hallazgos${NC}"
+    if   [[ $score -ge 80 ]]; then echo -e "${BRED}${score}/100 — Critical${NC}"
+    elif [[ $score -ge 50 ]]; then echo -e "${YELLOW}${score}/100 — High${NC}"
+    elif [[ $score -ge 25 ]]; then echo -e "${YELLOW}${score}/100 — Medium${NC}"
+    elif [[ $score -gt 0  ]]; then echo -e "${GREEN}${score}/100 — Low${NC}"
+    else                           echo -e "${GRAY}0/100 — No findings${NC}"
     fi
 }
 
-# ejemplo-legal.cl → Ejemplo Legal | estudio-ejemplo.com → Estudio Ejemplo
+# ejemplo-legal.example → Ejemplo Legal | estudio-ejemplo.example → Estudio Ejemplo
 domain_to_name() {
     local domain="$1"
     domain="${domain#https://}"; domain="${domain#http://}"; domain="${domain%%/*}"
@@ -134,7 +134,7 @@ elif "${TIPO}" == "remediation_pdf":
 
 db_path.parent.mkdir(parents=True, exist_ok=True)
 db_path.write_text(json.dumps(db, ensure_ascii=False, indent=2))
-print(f"[✓] DB actualizada: ${DOMINIO} → ${TIPO}")
+print(f"[✓] DB updated: ${DOMINIO} → ${TIPO}")
 PYEOF
 }
 
@@ -204,14 +204,14 @@ try:
 except Exception as e:
     # Si falla la extracción, al menos persiste session_folder
     d.setdefault("scan_data", {})["session_folder"] = session_folder
-    print(f"[!] No se pudo extraer scan_data completo de {report_json.name}: {e}")
+    print(f"[!] Could not fully extract scan_data from {report_json.name}: {e}")
 
 if d.get("status") in (None, QUEUED):
     d["status"] = RECON
 
 db_path.parent.mkdir(parents=True, exist_ok=True)
 db_path.write_text(json.dumps(db, ensure_ascii=False, indent=2))
-print(f"[✓] DB actualizada: {dominio} → scan_data + session_folder")
+print(f"[✓] DB updated: {dominio} → scan_data + session_folder")
 PYEOF
 }
 
@@ -260,11 +260,11 @@ cmd_targets_enriquecer() {
     fi
     INPUT="$(cd "$(dirname "${INPUT}")" && pwd)/$(basename "${INPUT}")"
 
-    mkdir -p "${REPORTES_DIR}"
+    mkdir -p "${REPORTS_DIR}"
     local TS OUT_NAME OUT_HOST
     TS="$(date +%Y%m%d_%H%M%S)"
     OUT_NAME="targets_enriquecidos_${TS}.json"
-    OUT_HOST="${REPORTES_DIR}/${OUT_NAME}"
+    OUT_HOST="${REPORTS_DIR}/${OUT_NAME}"
 
     info "Environment: ${GRAY}${ENTORNO}${NC}"
     info "Input:       ${GRAY}${INPUT}${NC}"
@@ -282,7 +282,7 @@ cmd_targets_enriquecer() {
             -e OLLAMA_HOST="${OLLAMA_HOST_URL}" \
             -v "${OPENCLAW_DIR}:/home/work/openclaw${ZFLAG}" \
             -v "${INPUT}:/home/work/input/domains.txt:${RO_OPT}" \
-            -v "${REPORTES_DIR}:/home/work/results${ZFLAG}" \
+            -v "${REPORTS_DIR}:/home/work/results${ZFLAG}" \
             -v "${SCRIPT_DIR}/db:/home/work/db${ZFLAG}" \
             "${IMAGE_NAME}" \
             python3 /home/work/openclaw/run_batch.py \
@@ -320,7 +320,7 @@ cmd_recon() {
     if ! check_dep "python3" ""; then exit 1; fi
 
     mkdir -p "$(dirname "${TARGETS_FILE}")"
-    mkdir -p "${REPORTES_DIR}"
+    mkdir -p "${REPORTS_DIR}"
 
     step "How do you want to enter the domains?"
     echo "  1) A single domain (type it now)"
@@ -396,8 +396,8 @@ PYEOF
 
     # Archivo de resultados de sesión
     SESSION_DATE=$(date +"%Y%m%d_%H%M%S")
-    RESULTS_FILE="${REPORTES_DIR}/recon_${SESSION_DATE}.txt"
-    PRIORITY_FILE="${REPORTES_DIR}/recon_priority_${SESSION_DATE}.txt"
+    RESULTS_FILE="${REPORTS_DIR}/recon_${SESSION_DATE}.txt"
+    PRIORITY_FILE="${REPORTS_DIR}/recon_priority_${SESSION_DATE}.txt"
 
     declare -a PRIORITY=()
     declare -a TODOS=()
@@ -425,31 +425,31 @@ issues = []
 spf = data.get('spf', {})
 if not spf.get('valid', False):
     score += 35
-    issues.append('SPF inválido o ausente')
+    issues.append('SPF invalid or missing')
 elif '-all' not in spf.get('record', ''):
     score += 20
-    issues.append('SPF con softfail (~all)')
+    issues.append('SPF softfail (~all)')
 
 # DMARC
 dmarc = data.get('dmarc', {})
 if not dmarc.get('valid', False):
     score += 45
-    issues.append('DMARC ausente')
+    issues.append('DMARC missing')
 else:
     policy = dmarc.get('tags', {}).get('p', {}).get('value', 'none')
     if policy == 'none':
         score += 30
-        issues.append('DMARC p=none (sin efecto)')
+        issues.append('DMARC p=none (no effect)')
     elif policy == 'quarantine':
         score += 15
-        issues.append('DMARC p=quarantine (incompleto)')
+        issues.append('DMARC p=quarantine (incomplete)')
 
 score = min(score, 100)
 
 priority = score >= 50
 print(f"SCORE:{score}")
-print(f"PRIORITY_HIT:{'SI' if priority else 'NO'}")
-print(f"ISSUES:{' | '.join(issues) if issues else 'Ninguno relevante'}")
+print(f"PRIORITY_HIT:{'YES' if priority else 'NO'}")
+print(f"ISSUES:{' | '.join(issues) if issues else 'None relevant'}")
 PYEOF
         )
 
@@ -458,10 +458,10 @@ PYEOF
         ISSUES=$(echo "$RESULTADO" | grep "ISSUES:" | cut -d: -f2-)
 
         # Mostrar resultado
-        printf "  Puntaje:  "; score_color "${SCORE:-0}"
+        printf "  Score:   "; score_color "${SCORE:-0}"
         echo -e "  Issues:  ${GRAY}${ISSUES}${NC}"
 
-        if [[ "$PRIORITY_HIT" == "SI" ]]; then
+        if [[ "$PRIORITY_HIT" == "YES" ]]; then
             echo -e "  Status:  ${BRED}● PRIORITY TARGET — worth a full scan${NC}"
             PRIORITY+=("$dominio")
         else
@@ -476,20 +476,20 @@ PYEOF
     step "Session summary"
 
     echo -e "  Domains analysed    : ${WHITE}${#DOMINIOS[@]}${NC}"
-    echo -e "  Targets prioritarios: ${BRED}${#PRIORITY[@]}${NC}"
+    echo -e "  Priority targets    : ${BRED}${#PRIORITY[@]}${NC}"
     echo -e "  Low priority        : ${GREEN}$(( ${#DOMINIOS[@]} - ${#PRIORITY[@]} ))${NC}"
     echo ""
 
     # Guardar resultados
     {
-        echo "# Crowsnest — Resultados de recon ${SESSION_DATE}"
+        echo "# Crowsnest — recon results ${SESSION_DATE}"
         echo "# Format: SCORE | PRIORITY_HIT | DOMAIN | ISSUES"
         for r in "${TODOS[@]}"; do echo "$r"; done
     } > "${RESULTS_FILE}"
 
     if [[ ${#PRIORITY[@]} -gt 0 ]]; then
         printf '%s\n' "${PRIORITY[@]}" > "${PRIORITY_FILE}"
-        echo -e "${BGREEN}Targets prioritarios guardados en:${NC}"
+        echo -e "${BGREEN}Priority targets saved to:${NC}"
         echo -e "  ${GRAY}${PRIORITY_FILE}${NC}"
         echo ""
 
@@ -522,7 +522,7 @@ cmd_report() {
     check_container_built
 
     # ── Modo directo (no-interactivo) ─────────────────────────────────────────
-    # ./crowsnest.sh report dominio.cl "Nombre Empresa"  → salta el menú de prioritarios
+    # ./crowsnest.sh report dominio.example "Nombre Empresa"  → salta el menú de prioritarios
     if [[ -n "${1:-}" ]]; then
         _run_report "$1" "${2:-$1}"
         return
@@ -532,7 +532,7 @@ cmd_report() {
     step "Target details"
 
     # ¿Hay prioritarios del día?
-    LATEST_PRIORITY=$(ls -t "${REPORTES_DIR}"/recon_priority_*.txt 2>/dev/null | head -1 || echo "")
+    LATEST_PRIORITY=$(ls -t "${REPORTS_DIR}"/recon_priority_*.txt 2>/dev/null | head -1 || echo "")
 
     if [[ -n "$LATEST_PRIORITY" ]]; then
         info "Priority targets available:"
@@ -601,7 +601,7 @@ _run_report() {
     local CLIENTE="$2"
     local TIMESTAMP; TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
     local SAFE_DOM="${DOMINIO//./_}"
-    local SESSION_DIR="${REPORTES_DIR}/${SAFE_DOM}_${TIMESTAMP}"
+    local SESSION_DIR="${REPORTS_DIR}/${SAFE_DOM}_${TIMESTAMP}"
 
     # El encuadre de cumplimiento lo elige el motor desde config/compliance/;
     # aqui solo se nombran los artefactos.
@@ -623,12 +623,12 @@ _run_report() {
         --name "crowsnest_report_${SAFE_DOM}" \
         --env-file "${SCRIPT_DIR}/.env" \
         --network bridge \
-        -v "${REPORTES_DIR}:/home/work/results:z" \
+        -v "${REPORTS_DIR}:/home/work/results:z" \
         -v "${SCRIPT_DIR}/config:/root/.config/subfinder:z" \
         -v "${SCRIPT_DIR}/scripts:/home/work/scripts:ro,z" \
         "${IMAGE_NAME}" \
         bash /home/work/scripts/audit.sh "${DOMINIO}" "/home/work/results/${SAFE_DOM}_${TIMESTAMP}" 2>&1 | \
-        grep -E "^\[|subfinder|httpx|checkdmarc|whatweb|nuclei|encontró|Total|✓" || true
+        grep -E "^\[|subfinder|httpx|checkdmarc|whatweb|nuclei|Total|✓" || true
 
     echo ""
 
@@ -658,7 +658,6 @@ _run_report() {
     [[ -n "$TECH_JSON"  ]] && COMMON_ARGS+=("--tech"  "${TECH_JSON}")
 
     # ── Report JSON ───────────────────────────────────────────────────────────
-    # El PDF NO se genera aquí — scripts/generate_pdf.py lo arma desde este JSON.
     step "Building the summary report JSON"
     local REPORT_JSON="${AUDIT_DIR}/${JSON_REPORT}"
 
@@ -674,25 +673,44 @@ _run_report() {
         --report-type "detailed" \
         --output "${DETAIL_JSON}"
 
-    # Registrar scan_data + session_folder en la DB (sin PDFs)
-    _db_update_scan "${DOMINIO}" "${CLIENTE}" "${REPORT_JSON}" "$(basename "${SESSION_DIR}")"
+    # ── PDFs ──────────────────────────────────────────────────────────────────
+    # El estado del target solo avanza a "reported" cuando existe al menos un
+    # PDF (ver _db_update); dejar esto como sugerencia manual significaba que
+    # el flujo principal del dashboard nunca completaba el ciclo de estados.
+    step "Rendering the report PDFs"
+    local REPORT_PDF="${AUDIT_DIR}/${REPORT_BASE}_${SAFE_DOM}_${TIMESTAMP}.pdf"
+    local DETAIL_PDF="${AUDIT_DIR}/${DETAIL_BASE}_${SAFE_DOM}_${TIMESTAMP}.pdf"
 
+    python3 "${SCRIPT_DIR}/scripts/generate_pdf.py" \
+        --input  "${REPORT_JSON}" \
+        --output "${REPORT_PDF}"
+    python3 "${SCRIPT_DIR}/scripts/generate_pdf.py" \
+        --input  "${DETAIL_JSON}" \
+        --output "${DETAIL_PDF}"
+
+    # Registrar scan_data + session_folder en la DB
+    _db_update_scan "${DOMINIO}" "${CLIENTE}" "${REPORT_JSON}" "$(basename "${SESSION_DIR}")"
+    _db_update "${DOMINIO}" "${CLIENTE}" "${DB_REPORT_KEY}" "${DOMINIO}/$(basename "${REPORT_PDF}")"
+    _db_update "${DOMINIO}" "${CLIENTE}" "${DB_DETAIL_KEY}" "${DOMINIO}/$(basename "${DETAIL_PDF}")"
 
     # ── RESULTADO ─────────────────────────────────────────────────────────────
     echo ""
     echo -e "${RED}┌─────────────────────────────────────────────────────────┐${NC}"
-    echo -e "${RED}│${NC}  ${BGREEN}✓ Scan complete — report JSON ready${NC}                     ${RED}│${NC}"
+    echo -e "${RED}│${NC}  ${BGREEN}✓ Scan complete — report ready${NC}                          ${RED}│${NC}"
     echo -e "${RED}│${NC}  ${GRAY}${CLIENTE}${NC}"
     echo -e "${RED}├─────────────────────────────────────────────────────────┤${NC}"
-    echo -e "${RED}│${NC}  Summary JSON  : ${GRAY}$(basename "${REPORT_JSON}")${NC}"
-    echo -e "${RED}│${NC}  Detailed JSON : ${GRAY}$(basename "${DETAIL_JSON}")${NC}"
+    echo -e "${RED}│${NC}  Summary PDF  : ${GRAY}$(basename "${REPORT_PDF}")${NC}"
+    echo -e "${RED}│${NC}  Detailed PDF : ${GRAY}$(basename "${DETAIL_PDF}")${NC}"
     echo -e "${RED}├─────────────────────────────────────────────────────────┤${NC}"
     echo -e "${RED}│${NC}  Dir: ${GRAY}${AUDIT_DIR}${NC}"
     echo -e "${RED}└─────────────────────────────────────────────────────────┘${NC}"
     echo ""
 
-    info "Render the PDF with:"
-    echo -e "  ${GRAY}python3 scripts/generate_pdf.py --input ${REPORT_JSON} --output report.pdf${NC}"
+    # Sin prompt de "abrir el PDF" a proposito: _run_report corre tambien en
+    # batch (subshells en paralelo, sin stdin) y desde el wrapper de la webapp,
+    # que escribe una cantidad fija de lineas. Un `read` de mas aqui haria
+    # fallar cada worker del batch y romperia el boton del dashboard.
+    info "Report ready."
 }
 
 # =============================================================================
@@ -712,10 +730,10 @@ cmd_diagnostico() {
 
     # Buscar sesión más reciente para este dominio
     local SESSION_DIR
-    SESSION_DIR=$(ls -td "${REPORTES_DIR}/${SAFE_DOM}_"* 2>/dev/null | head -1 || echo "")
+    SESSION_DIR=$(ls -td "${REPORTS_DIR}/${SAFE_DOM}_"* 2>/dev/null | head -1 || echo "")
 
     if [[ -z "$SESSION_DIR" ]] || [[ ! -d "$SESSION_DIR" ]]; then
-        error "No previous session for '${DOMINIO}' under ${REPORTES_DIR}/"
+        error "No previous session for '${DOMINIO}' under ${REPORTS_DIR}/"
         info "Run a scan first: ${GRAY}./crowsnest.sh report${NC}"
         exit 1
     fi
@@ -819,8 +837,8 @@ PYEOF
     echo -e "${RED}┌─────────────────────────────────────────────────────────┐${NC}"
     echo -e "${RED}│${NC}  ${BGREEN}✓ Detailed report re-rendered (no new scan)${NC}          ${RED}│${NC}"
     echo -e "${RED}│${NC}  ${GRAY}${CLIENTE}${NC}"
-    echo -e "${RED}│${NC}  Riesgo    : $(score_color "${R_SCORE:-0}") — ${R_LEVEL}"
-    echo -e "${RED}│${NC}  Escenarios: ${WHITE}${R_SCEN:-0}${NC} de impacto en el negocio identificados"
+    echo -e "${RED}│${NC}  Risk      : $(score_color "${R_SCORE:-0}") — ${R_LEVEL}"
+    echo -e "${RED}│${NC}  Scenarios : ${WHITE}${R_SCEN:-0}${NC} business-impact scenarios identified"
     echo -e "${RED}├─────────────────────────────────────────────────────────┤${NC}"
     echo -e "${RED}│${NC}  PDF: ${GRAY}${DIAG_PDF}${NC}"
     echo -e "${RED}└─────────────────────────────────────────────────────────┘${NC}"
@@ -858,8 +876,8 @@ cmd_trabajo() {
     warn "This runs a FULL scan (~35 min)."
     warn "Only proceed with written authorisation from the system owner."
     echo ""
-    info "Dominio     : ${WHITE}${DOMINIO}${NC}"
-    info "Cliente     : ${WHITE}${CLIENTE}${NC}"
+    info "Domain      : ${WHITE}${DOMINIO}${NC}"
+    info "Name        : ${WHITE}${CLIENTE}${NC}"
     info "Authorisation: ${WHITE}${AUTH_REF}${NC}"
     echo ""
     ask "Confirm and run the full scan? [y/N]"
@@ -875,22 +893,22 @@ _run_trabajo() {
     local AUTH_REF="$3"
     local TIMESTAMP; TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
     local SAFE_DOM="${DOMINIO//./_}"
-    local SESSION_DIR="${REPORTES_DIR}/${SAFE_DOM}_${TIMESTAMP}"
+    local SESSION_DIR="${REPORTS_DIR}/${SAFE_DOM}_${TIMESTAMP}"
 
     mkdir -p "${SESSION_DIR}"/{subdomains,email,nuclei,technologies,http}
 
-    # Registrar autorización para trazabilidad
+    # Registrar autorizacion para trazabilidad
     {
         echo "# Crowsnest — scan authorisation record"
-        echo "Fecha       : $(date)"
-        echo "Cliente     : ${CLIENTE}"
-        echo "Dominio     : ${DOMINIO}"
+        echo "Date        : $(date)"
+        echo "Name        : ${CLIENTE}"
+        echo "Domain      : ${DOMINIO}"
         echo "Authorisation: ${AUTH_REF}"
-        echo "Operador    : $(whoami)@$(hostname)"
+        echo "Operator    : $(whoami)@$(hostname)"
     } > "${SESSION_DIR}/authorisation_${SAFE_DOM}.txt"
     log "Authorisation recorded at: ${GRAY}${SESSION_DIR}/authorisation_${SAFE_DOM}.txt${NC}"
 
-    step "Ejecutando pipeline completo en Docker (~35 min)"
+    step "Running the full pipeline in Docker (~35 min)"
     info "Live progress below ↓"
     echo ""
 
@@ -899,7 +917,7 @@ _run_trabajo() {
         --name "crowsnest_remediation_${SAFE_DOM}" \
         --env-file "${SCRIPT_DIR}/.env" \
         --network bridge \
-        -v "${REPORTES_DIR}:/home/work/results:z" \
+        -v "${REPORTS_DIR}:/home/work/results:z" \
         -v "${SCRIPT_DIR}/config:/root/.config/subfinder:z" \
         -v "${SCRIPT_DIR}/scripts:/home/work/scripts:ro,z" \
         "${IMAGE_NAME}" \
@@ -969,7 +987,7 @@ PYEOF
     echo -e "${RED}│${NC}  ${GRAY}${CLIENTE}${NC}"
     echo -e "${RED}│${NC}  ${GRAY}Authorisation: ${AUTH_REF}${NC}"
     echo -e "${RED}├─────────────────────────────────────────────────────────┤${NC}"
-    echo -e "${RED}│${NC}  Riesgo  : $(score_color "${R_SCORE:-0}") — ${R_LEVEL}"
+    echo -e "${RED}│${NC}  Risk    : $(score_color "${R_SCORE:-0}") — ${R_LEVEL}"
     echo -e "${RED}│${NC}  Findings: ${WHITE}${R_TOTAL:-0}${NC} total  ${BRED}Critical:${R_CRIT:-0}${NC}  ${YELLOW}High:${R_HIGH:-0}${NC}  Med:${R_MED:-0}  Low:${R_LOW:-0}"
     echo -e "${RED}├─────────────────────────────────────────────────────────┤${NC}"
     echo -e "${RED}│${NC}  PDF : ${GRAY}${PDF_OUT}${NC}"
@@ -981,7 +999,7 @@ PYEOF
     read -r abrir
     [[ "${abrir,,}" == "y" || "${abrir,,}" == "s" ]] && _open_pdf "${PDF_OUT}"
 
-    info "Informe listo para entregar al cliente."
+    info "Report ready to deliver to the client."
 }
 
 # =============================================================================
@@ -1010,13 +1028,13 @@ cmd_batch() {
         TARGET_FILE=$(ls -t "${TARGETS_DIR}"/recon_priority_*.txt 2>/dev/null | head -1 || true)
     fi
     if [[ -z "$TARGET_FILE" ]]; then
-        TARGET_FILE=$(ls -t "${REPORTES_DIR}"/recon_priority_*.txt 2>/dev/null | head -1 || true)
+        TARGET_FILE=$(ls -t "${REPORTS_DIR}"/recon_priority_*.txt 2>/dev/null | head -1 || true)
     fi
 
     if [[ -z "$TARGET_FILE" ]] || [[ ! -f "$TARGET_FILE" ]]; then
         error "No priority target list found."
-        info "Genera una con: ${GRAY}./crowsnest.sh recon${NC}"
-        info "O provee una ruta: ${GRAY}./crowsnest.sh batch targets/mi_lista.txt${NC}"
+        info "Generate one with: ${GRAY}./crowsnest.sh recon${NC}"
+        info "Or provide a path: ${GRAY}./crowsnest.sh batch targets/mi_lista.txt${NC}"
         exit 1
     fi
 
@@ -1052,10 +1070,10 @@ cmd_batch() {
     if [[ $FLAG_AUTO_NAME -eq 1 || $FLAG_CONFIRM -eq 1 ]]; then
         modo_nombres="a"
     else
-        echo "  a) Automatic — derive from the domain  (example-corp.com → Example Corp)"
+        echo "  a) Automatic — derive from the domain  (example-corp.example → Example Corp)"
         echo "  m) Manual — pedir nombre por cada dominio"
         echo ""
-        ask "Modo de nombres [a/m, default a]:"
+        ask "Naming mode [a/m, default a]:"
         read -r modo_nombres
         modo_nombres="${modo_nombres:-a}"
         echo ""
@@ -1064,10 +1082,10 @@ cmd_batch() {
     declare -a NOMBRES=()
     local auto_name nombre dom
     if [[ "${modo_nombres,,}" == "m" ]]; then
-        step "Nombres de clientes"
+        step "Client names"
         for dom in "${DOMINIOS[@]}"; do
             auto_name=$(domain_to_name "$dom")
-            ask "Nombre para '${dom}' [Enter = ${auto_name}]:"
+            ask "Name for '${dom}' [Enter = ${auto_name}]:"
             read -r nombre
             NOMBRES+=("${nombre:-$auto_name}")
         done
@@ -1085,7 +1103,7 @@ cmd_batch() {
         printf "  %2d) %-40s → %s\n" "$((i+1))" "${DOMINIOS[$i]}" "${NOMBRES[$i]}"
     done
     echo ""
-    info "Workers paralelos : ${WHITE}${N_WORKERS}${NC}"
+    info "Parallel workers  : ${WHITE}${N_WORKERS}${NC}"
     info "Total domains     : ${WHITE}${TOTAL}${NC}"
     echo ""
     if [[ $FLAG_CONFIRM -eq 1 ]]; then
@@ -1098,7 +1116,7 @@ cmd_batch() {
 
     # ── Ejecución en paralelo ─────────────────────────────────────────────────
     local BATCH_TS; BATCH_TS=$(date +"%Y%m%d_%H%M%S")
-    local BATCH_LOG_DIR="${REPORTES_DIR}/batch_${BATCH_TS}_logs"
+    local BATCH_LOG_DIR="${REPORTS_DIR}/batch_${BATCH_TS}_logs"
     mkdir -p "$BATCH_LOG_DIR"
 
     export CROWSNEST_BATCH_MODE=1
@@ -1109,7 +1127,7 @@ cmd_batch() {
     local -a np=() ni=()
     local j pid pidx ex d
 
-    step "Ejecutando..."
+    step "Running..."
     echo ""
 
     for i in "${!DOMINIOS[@]}"; do
@@ -1127,7 +1145,7 @@ cmd_batch() {
                     ex=0; wait "$pid" 2>/dev/null || ex=$?
                     d="${DOMINIOS[$pidx]}"
                     if [[ $ex -eq 0 ]]; then
-                        echo -e "${BGREEN}[✓ $((pidx+1))/${TOTAL}]${NC} ${WHITE}${d}${NC} — completado"
+                        echo -e "${BGREEN}[✓ $((pidx+1))/${TOTAL}]${NC} ${WHITE}${d}${NC} — done"
                         completed=$((completed + 1))
                     else
                         echo -e "${BRED}[✗ $((pidx+1))/${TOTAL}]${NC} ${WHITE}${d}${NC} — FAILED  (log: ${safe}.log)"
@@ -1143,7 +1161,7 @@ cmd_batch() {
         done
 
         # Lanzar job
-        echo -e "${CYAN}[→ ${num}/${TOTAL}]${NC} ${WHITE}${dom}${NC} — iniciando..."
+        echo -e "${CYAN}[→ ${num}/${TOTAL}]${NC} ${WHITE}${dom}${NC} — starting..."
         ( _run_report "$dom" "$nombre" ) > "${BATCH_LOG_DIR}/${safe}.log" 2>&1 &
         PIDS+=($!)
         PID_IDX+=($i)
@@ -1158,7 +1176,7 @@ cmd_batch() {
                 ex=0; wait "$pid" 2>/dev/null || ex=$?
                 d="${DOMINIOS[$pidx]}"
                 if [[ $ex -eq 0 ]]; then
-                    echo -e "${BGREEN}[✓ $((pidx+1))/${TOTAL}]${NC} ${WHITE}${d}${NC} — completado"
+                    echo -e "${BGREEN}[✓ $((pidx+1))/${TOTAL}]${NC} ${WHITE}${d}${NC} — done"
                     completed=$((completed + 1))
                 else
                     local fs="${d//./_}"
@@ -1179,14 +1197,14 @@ cmd_batch() {
     # ── Resumen ───────────────────────────────────────────────────────────────
     echo ""
     echo -e "${RED}┌─────────────────────────────────────────────────────────┐${NC}"
-    echo -e "${RED}│${NC}  ${BGREEN}✓ Batch completado${NC}                                     ${RED}│${NC}"
+    echo -e "${RED}│${NC}  ${BGREEN}✓ Batch complete${NC}                                       ${RED}│${NC}"
     echo -e "${RED}├─────────────────────────────────────────────────────────┤${NC}"
     echo -e "${RED}│${NC}  Total       : ${WHITE}${TOTAL}${NC}"
-    echo -e "${RED}│${NC}  Completados : ${BGREEN}${completed}${NC}"
-    echo -e "${RED}│${NC}  Fallidos    : ${BRED}${failed}${NC}"
+    echo -e "${RED}│${NC}  Completed   : ${BGREEN}${completed}${NC}"
+    echo -e "${RED}│${NC}  Failed      : ${BRED}${failed}${NC}"
     echo -e "${RED}├─────────────────────────────────────────────────────────┤${NC}"
     echo -e "${RED}│${NC}  Logs        : ${GRAY}${BATCH_LOG_DIR}${NC}"
-    echo -e "${RED}│${NC}  Reportes    : ${GRAY}${REPORTES_DIR}${NC}"
+    echo -e "${RED}│${NC}  Reports     : ${GRAY}${REPORTS_DIR}${NC}"
     echo -e "${RED}└─────────────────────────────────────────────────────────┘${NC}"
     echo ""
 }
@@ -1237,8 +1255,8 @@ case "${1:-help}" in
         case "${2:-}" in
             enriquecer) cmd_targets_enriquecer "${@:3}" ;;
             *)
-                error "Subcomando desconocido: 'targets ${2:-}'"
-                echo -e "  Usage: ${GRAY}./crowsnest.sh targets enriquecer [archivo]${NC}"
+                error "Unknown subcommand: 'targets ${2:-}'"
+                echo -e "  Usage: ${GRAY}./crowsnest.sh targets enriquecer [file]${NC}"
                 exit 1 ;;
         esac ;;
     recon)       cmd_recon ;;
@@ -1249,7 +1267,7 @@ case "${1:-help}" in
     webapp)      bash "${SCRIPT_DIR}/webapp/run.sh" ;;
     help|--help|-h) cmd_help ;;
     *)
-        error "Comando desconocido: '${1}'"
+        error "Unknown command: '${1}'"
         echo ""
         cmd_help
         exit 1

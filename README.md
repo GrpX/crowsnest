@@ -126,6 +126,25 @@ because it fingerprints the target's hosts rather than only reading public
 DNS. The constraint has already cost this pipeline a tool it wanted and
 reduced another to half its capability.
 
+## Scope
+
+What it produces: indicators of exposure gathered from public sources —
+DNS records, certificate and header data, indexed subdomains, DMARC/SPF
+posture, technology fingerprints, and CVE matches from `nuclei` templates.
+These are indicators, not confirmation by exploitation; nothing in the
+pipeline verifies a finding by acting on the target.
+
+What it needs: Docker, to run the containerised recon tools. An LLM backend
+is optional — without one, the enrichment and executive-summary stages are
+skipped and the report still renders (see `scripts/nuclei_to_report.py` and
+the smoke test that covers this path).
+
+What runs without credentials: `subfinder`, `httpx`, `whatweb` and
+`checkdmarc` work with no API keys. The OSINT provider keys in
+`.env.example` (Shodan, Censys, GitHub, Chaos, SecurityTrails, BinaryEdge,
+VirusTotal, FullHunt, ZoomEye) are optional and widen subdomain coverage —
+they do not gate any functionality.
+
 ## Stack
 
 Python · Docker Compose · Flask + SSE · Jinja2 + WeasyPrint · Crawl4AI ·
@@ -135,6 +154,8 @@ Recon tooling runs inside the container: subfinder, httpx, nuclei,
 checkdmarc, whatweb, nmap, amass.
 
 ## Example output
+
+![Crowsnest dashboard](docs/screenshots/dashboard.png)
 
 [`examples/sample_report.pdf`](examples/sample_report.pdf) — a full report
 generated against a fictitious target with the OWASP Top 10 framework active:
@@ -204,7 +225,7 @@ docs/                   tooling evaluation and design decisions
 ## What is not in this repository
 
 Real target data, scan results and generated reports stay out: `db/`,
-`targets/` and `reportes/` are ignored, as is any provider config holding
+`targets/` and `reports/` are ignored, as is any provider config holding
 real keys. The tracked provider config is an empty `.example` template.
 
 ## License

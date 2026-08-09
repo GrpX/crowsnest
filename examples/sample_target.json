@@ -2,18 +2,18 @@
   "_comentario": "Datos 100% ficticios. Ilustra el esquema de db/targets.json; ningun dominio, organizacion ni correo de este archivo corresponde a una entidad real.",
   "version": 1,
   "targets": {
-    "ejemplo.cl": {
-      "name": "ejemplo.cl",
+    "ejemplo.example": {
+      "name": "ejemplo.example",
       "status": "reported",
       "report_at": "2026-01-14T10:15:00",
-      "report_pdf": "reportes/ejemplo.cl/Crowsnest_Report_ejemplo_20260114.pdf",
+      "report_pdf": "reports/ejemplo.example/Crowsnest_Report_ejemplo_20260114.pdf",
       "detailed_report_pdf": null,
       "remediation_at": null,
       "remediation_pdf": null,
       "skip_reason": "",
       "emails_found": [
-        "contacto@ejemplo.cl",
-        "soporte@ejemplo.cl"
+        "contacto@ejemplo.example",
+        "soporte@ejemplo.example"
       ],
       "emails_found_at": "2026-01-15",
       "email_mx_valid": true,
@@ -25,7 +25,7 @@
         "medium_findings": 4,
         "email_security_status": "SPF presente, DMARC ausente",
         "key_recommendation": "Publicar registro DMARC en modo p=none y revisar cabeceras de seguridad HTTP.",
-        "session_folder": "ejemplo_cl_20260114_101500",
+        "session_folder": "ejemplo_example_20260114_101500",
         "top_findings": [
           {
             "id": "dmarc-missing",

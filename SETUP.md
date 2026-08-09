@@ -147,7 +147,7 @@ $EDITOR targets/domains.txt        # one per line, '#' comments a line
 ./crowsnest.sh webapp        # http://0.0.0.0:5000
 ```
 
-Reports land in `reportes/<domain>_<timestamp>/`. That directory is
+Reports land in `reports/<domain>_<timestamp>/`. That directory is
 git-ignored.
 
 ### Opening a report from WSL2
@@ -155,7 +155,7 @@ git-ignored.
 ```bash
 explorer.exe .
 # or browse to:
-# \\wsl.localhost\Ubuntu-24.04\home\<user>\crowsnest\reportes\
+# \\wsl.localhost\Ubuntu-24.04\home\<user>\crowsnest\reports\
 ```
 
 ---
@@ -185,7 +185,7 @@ crowsnest/
 ├── examples/                    sample report and target schema
 ├── targets/                     your domain lists — git-ignored
 ├── db/                          target database — git-ignored
-└── reportes/                    scan output — git-ignored
+└── reports/                     scan output — git-ignored
 ```
 
 ## Troubleshooting

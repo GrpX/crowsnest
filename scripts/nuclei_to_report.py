@@ -4,12 +4,12 @@ nuclei_to_report.py — Convierte JSON de nuclei + checkdmarc a informe estructu
 
 Uso:
     python3 scripts/nuclei_to_report.py \
-        --input  reportes/SESION/nuclei/nuclei_dominio.json \
-        --dmarc  reportes/SESION/email/checkdmarc_dominio.json \
-        --tech   reportes/SESION/technologies/whatweb_dominio.json \
+        --input  reports/SESION/nuclei/nuclei_dominio.json \
+        --dmarc  reports/SESION/email/checkdmarc_dominio.json \
+        --tech   reports/SESION/technologies/whatweb_dominio.json \
         --client "Cliente S.A." \
-        --domain dominio.cl \
-        --output reportes/SESION/informe.json
+        --domain dominio.example \
+        --output reports/SESION/informe.json
 """
 
 import argparse
@@ -50,8 +50,8 @@ def load_compliance(selected: str | None):
     """
     frameworks = available_frameworks()
     if not frameworks:
-        print(f"[!] Sin frameworks en {COMPLIANCE_DIR}; el informe se genera sin "
-              f"seccion de cumplimiento.")
+        print(f"[!] No frameworks in {COMPLIANCE_DIR}; the report is generated without "
+              f"a compliance section.")
         return None
 
     fid = selected or os.environ.get("CROWSNEST_COMPLIANCE_FRAMEWORK")
@@ -59,15 +59,15 @@ def load_compliance(selected: str | None):
         if len(frameworks) == 1:
             fid = next(iter(frameworks))
         else:
-            print("[✗] Hay varios frameworks de cumplimiento y ninguno seleccionado.",
+            print("[✗] Multiple compliance frameworks available and none selected.",
                   file=sys.stderr)
-            print("    Usa --compliance <id> o CROWSNEST_COMPLIANCE_FRAMEWORK=<id>.", file=sys.stderr)
-            print("    Disponibles: " + ", ".join(sorted(frameworks)), file=sys.stderr)
+            print("    Use --compliance <id> or CROWSNEST_COMPLIANCE_FRAMEWORK=<id>.", file=sys.stderr)
+            print("    Available: " + ", ".join(sorted(frameworks)), file=sys.stderr)
             sys.exit(2)
 
     if fid not in frameworks:
-        print(f"[✗] Framework de cumplimiento desconocido: {fid!r}", file=sys.stderr)
-        print("    Disponibles: " + ", ".join(sorted(frameworks)), file=sys.stderr)
+        print(f"[✗] Unknown compliance framework: {fid!r}", file=sys.stderr)
+        print("    Available: " + ", ".join(sorted(frameworks)), file=sys.stderr)
         sys.exit(2)
 
     return yaml.safe_load(frameworks[fid].read_text(encoding="utf-8"))
@@ -944,7 +944,7 @@ def load_summary(path: str | None) -> str:
         return ""
     p = Path(path)
     if not p.is_file():
-        print(f"[!] No existe el resumen: {p}; se genera el informe sin el.",
+        print(f"[!] Summary not found: {p}; the report is generated without it.",
               file=sys.stderr)
         return ""
     return p.read_text(encoding="utf-8").strip()
@@ -1044,33 +1044,33 @@ def main():
                              "Si se omite, usa CROWSNEST_COMPLIANCE_FRAMEWORK o el unico disponible.")
     args = parser.parse_args()
 
-    print(f"[*] Procesando hallazgos de nuclei: {args.input}")
+    print(f"[*] Processing nuclei findings: {args.input}")
     nuclei_findings = parse_nuclei_findings(load_json_lines(Path(args.input)))
-    print(f"[+] {len(nuclei_findings)} hallazgos de nuclei procesados")
+    print(f"[+] {len(nuclei_findings)} nuclei findings processed")
 
-    print("[*] Analizando seguridad de correo...")
+    print("[*] Analysing email security...")
     dmarc_data = load_json(Path(args.dmarc)) if args.dmarc else None
     email_block, email_formal = parse_dmarc(dmarc_data, finding_offset=0)
-    print(f"[+] Estado de correo: {email_block['status']} — {len(email_formal)} hallazgos formales")
+    print(f"[+] Email status: {email_block['status']} — {len(email_formal)} formal findings")
 
-    print("[*] Procesando tecnologías...")
+    print("[*] Processing technologies...")
     tech_raw     = load_json(Path(args.tech)) if args.tech else None
     technologies = parse_technologies(tech_raw if isinstance(tech_raw, list) else [])
 
     nmap_findings = []
     if args.nmap:
-        print(f"[*] Procesando hallazgos de nmap: {args.nmap}")
+        print(f"[*] Processing nmap findings: {args.nmap}")
         nmap_data     = load_json(Path(args.nmap))
         nmap_findings = parse_nmap_findings(nmap_data,
                                             finding_offset=len(email_formal) + len(nuclei_findings))
-        print(f"[+] {len(nmap_findings)} hallazgos de nmap procesados")
+        print(f"[+] {len(nmap_findings)} nmap findings processed")
 
     compliance_fw = load_compliance(args.compliance)
     if compliance_fw:
-        print(f"[*] Framework de cumplimiento: {compliance_fw.get('name')} "
+        print(f"[*] Compliance framework: {compliance_fw.get('name')} "
               f"({compliance_fw.get('id')})")
 
-    print(f"[*] Construyendo informe ({args.report_type})...")
+    print(f"[*] Building report ({args.report_type})...")
     report = build_report(args, nuclei_findings, email_block, email_formal, technologies,
                           dmarc_data=dmarc_data, nmap_findings=nmap_findings,
                           compliance_fw=compliance_fw)
@@ -1084,13 +1084,13 @@ def main():
     print(f"\n{'='*56}")
     print(f"  {args.client} ({args.domain})")
     print(f"{'='*56}")
-    print(f"  Riesgo   : {r['risk_level']} ({r['risk_score']}/100)")
-    print(f"  Total    : {r['total_findings']} hallazgos")
-    print(f"  Críticos : {r['findings_by_severity']['critical']}")
-    print(f"  Altos    : {r['findings_by_severity']['high']}")
-    print(f"  Medios   : {r['findings_by_severity']['medium']}")
-    print(f"  Bajos    : {r['findings_by_severity']['low']}")
-    print(f"  Correo   : {r['email_security_status']}")
+    print(f"  Risk     : {r['risk_level']} ({r['risk_score']}/100)")
+    print(f"  Total    : {r['total_findings']} findings")
+    print(f"  Critical : {r['findings_by_severity']['critical']}")
+    print(f"  High     : {r['findings_by_severity']['high']}")
+    print(f"  Medium   : {r['findings_by_severity']['medium']}")
+    print(f"  Low      : {r['findings_by_severity']['low']}")
+    print(f"  Email    : {r['email_security_status']}")
     print(f"{'='*56}\n")
 
 

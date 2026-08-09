@@ -72,11 +72,11 @@ def dashboard():
     target_files = sorted(
         [f.name for f in targets_dir.glob("*.txt")] if targets_dir.exists() else []
     )
-    reportes_dir = REPO_DIR / "reportes"
+    reports_dir = REPO_DIR / "reports"
     sessions = []
-    if reportes_dir.exists():
+    if reports_dir.exists():
         sessions = sorted(
-            [d.name for d in reportes_dir.iterdir()
+            [d.name for d in reports_dir.iterdir()
              if d.is_dir() and not d.name.startswith("batch")],
             reverse=True,
         )[:50]

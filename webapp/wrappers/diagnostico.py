@@ -7,14 +7,14 @@ from pathlib import Path
 
 REPO_DIR = Path(__file__).parent.parent.parent.resolve()
 CROWSNEST = str(REPO_DIR / "crowsnest.sh")
-REPORTES_DIR = REPO_DIR / "reportes"
+REPORTS_DIR = REPO_DIR / "reports"
 
 dominio = sys.argv[1] if len(sys.argv) > 1 else ""
 cliente_arg = sys.argv[2] if len(sys.argv) > 2 else ""
 safe_dom = dominio.replace(".", "_")
 
 # Detect client from most recent session JSON
-sessions = sorted(REPORTES_DIR.glob(f"{safe_dom}_*"), reverse=True)
+sessions = sorted(REPORTS_DIR.glob(f"{safe_dom}_*"), reverse=True)
 detected = ""
 if sessions:
     for pat in [f"report_{safe_dom}.json", f"detailed_{safe_dom}.json"]:

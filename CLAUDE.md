@@ -158,11 +158,6 @@ translate them.
 
 - **Logo.** The current wordmark is plain typography, a placeholder for a
   real one. Replacing it is a single file — see the branding note above.
-- **Dashboard screenshot.** The old one was deleted: it predated the
-  refactor and showed the removed brand, the sales funnel and the outreach
-  column. No headless browser is available in this environment, and the
-  dashboard populates via JavaScript, so a static renderer would only
-  capture "INITIALIZING…". Needs a real capture.
 - **Final security grep.** Run before publishing, over the whole tree.
 - **Visual PDF review.** `examples/sample_report.pdf` has been checked by
   text extraction, not read page by page.

@@ -24,7 +24,7 @@ services:
     # -------------------------------------------------------------------------
     volumes:
       # Resultados de auditorías (no se borran al apagar el contenedor)
-      - ./reportes:/home/work/results
+      - ./reports:/home/work/results
 
       # Templates de nuclei (se actualizan sin reconstruir la imagen)
       - ./config/nuclei:/root/.nuclei-templates

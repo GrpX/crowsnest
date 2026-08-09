@@ -83,7 +83,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
-    print("[*] Cargando informe...")
+    print("[*] Loading report...")
     data = json.loads(Path(args.input).read_text(encoding="utf-8"))
     data = translate_finding_names(data)
     data["logo_b64"] = logo_data_uri()
@@ -92,15 +92,15 @@ if __name__ == "__main__":
     data["EFFORT_LABEL"] = EFFORT_LABEL
 
     if not TEMPLATE_PATH.exists():
-        print(f"[✗] Template no encontrado: {TEMPLATE_PATH}")
+        print(f"[✗] Template not found: {TEMPLATE_PATH}")
         sys.exit(1)
 
     compliance = data.get("compliance") or {}
-    print(f"[*] Renderizando template "
-          f"(cumplimiento: {compliance.get('id') or 'ninguno'})...")
+    print(f"[*] Rendering template "
+          f"(compliance: {compliance.get('id') or 'none'})...")
     html = render_html(data, TEMPLATE_PATH)
 
-    print("[*] Generando PDF...")
+    print("[*] Generating PDF...")
     generate_pdf(html, Path(args.output))
     size = Path(args.output).stat().st_size // 1024
-    print(f"[✓] PDF generado: {args.output} ({size} KB)")
+    print(f"[✓] PDF generated: {args.output} ({size} KB)")

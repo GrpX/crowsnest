@@ -374,13 +374,30 @@ def test_los_frameworks_de_cumplimiento_son_yaml_valido():
         assert isinstance(d.get("mapping"), dict), f"{f.name} no declara mapping"
 
 
+# RFC 2606 (+ RFC 6761): unicos dominios/TLD garantizados por IANA a no
+# resolver nunca a un sitio real. "contiene 'example'" NO es el criterio
+# — domainexample.com, clientexample.com o thisisatest.net lo contienen
+# (o se le parecen) sin estar reservados; ninguno de los dos es sustituto
+# valido de esta lista exacta.
+_DOMINIOS_RESERVADOS_EXACTOS = {"example.com", "example.net", "example.org"}
+_TLDS_RESERVADOS = {"test", "invalid", "localhost", "example"}
+
+
+def _es_dominio_reservado(dominio: str) -> bool:
+    dominio = dominio.lower().rstrip(".")
+    if dominio in _DOMINIOS_RESERVADOS_EXACTOS:
+        return True
+    tld = dominio.rsplit(".", 1)[-1]
+    return tld in _TLDS_RESERVADOS
+
+
 def test_el_ejemplo_de_target_usa_dominios_reservados():
     """El esquema de ejemplo no debe apuntar a nadie real."""
     d = json.loads((REPO_ROOT / "examples" / "sample_target.json")
                    .read_text(encoding="utf-8"))
-    permitidos = ("example.com", "example.org", "example.net", "ejemplo.cl")
     for dominio in d["targets"]:
-        assert dominio in permitidos, f"dominio no reservado en el ejemplo: {dominio}"
+        assert _es_dominio_reservado(dominio), \
+            f"dominio no reservado en el ejemplo: {dominio}"
 
 
 def test_el_env_de_ejemplo_no_trae_secretos():

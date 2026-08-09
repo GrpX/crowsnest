@@ -2,7 +2,7 @@
 """Enriquece db/targets.json con datos del flash JSON de cada target.
 
 Para cada target en estado recon o enriched, busca la sesion de scan mas
-reciente en reportes/<dominio_con_guiones>_<fecha>/, lee el flash_*.json y
+reciente en reports/<dominio_con_guiones>_<fecha>/, lee el flash_*.json y
 agrega un bloque "scan_data" al target. No toca los descartados.
 """
 import json
@@ -17,7 +17,7 @@ if REPO not in sys.path:
 from lib.states import ENRICHED, RECON  # noqa: E402
 
 DB = os.path.join(REPO, "db", "targets.json")
-REPORTES = os.path.join(REPO, "reportes")
+REPORTES = os.path.join(REPO, "reports")
 
 # Folder name: <dominio_con_guiones>_<YYYYMMDD>_<HHMMSS>
 SESSION_RE = re.compile(r"^(.+)_(\d{8})_(\d{6})$")
@@ -152,16 +152,18 @@ def main():
         json.load(fh)
 
     # ---- Reporte ----
+    # Los valores de risk_level (Alto/Medio/Bajo/Critico) vienen del motor de
+    # informes y quedan en espanol a proposito — es el mismo idioma del PDF.
     print("=" * 60)
-    print("ENRIQUECIMIENTO DE TARGETS — REPORTE")
+    print("TARGET ENRICHMENT — REPORT")
     print("=" * 60)
-    print(f"Total targets enriquecidos : {len(enriquecidos)}")
-    print(f"Sin sesion en reportes/        : {len(sin_sesion)}")
+    print(f"Total targets enriched      : {len(enriquecidos)}")
+    print(f"No session under reports/   : {len(sin_sesion)}")
     if sin_flash:
-        print(f"Con carpeta pero sin flash JSON: {len(sin_flash)}")
+        print(f"Folder found, no flash JSON : {len(sin_flash)}")
 
     niveles = Counter(lvl for _, _, lvl in enriquecidos)
-    print("\nDistribucion de risk_level:")
+    print("\nrisk_level distribution:")
     for lvl in ("Alto", "Medio", "Bajo"):
         print(f"  {lvl:6}: {niveles.get(lvl, 0)}")
     otros = {k: v for k, v in niveles.items() if k not in ("Alto", "Medio", "Bajo")}
@@ -170,19 +172,19 @@ def main():
 
     ranked = sorted(enriquecidos, key=lambda x: (x[1] is None, -(x[1] or 0)))
     if solo:
-        print("\nTargets enriquecidos por risk_score:")
+        print("\nEnriched targets by risk_score:")
     else:
-        print("\nTop 5 targets por risk_score:")
+        print("\nTop 5 targets by risk_score:")
         ranked = ranked[:5]
     for dom, score, lvl in ranked:
         print(f"  {score:>4}  {lvl:6}  {dom}")
 
     if sin_sesion:
-        print(f"\nSin sesion encontrada ({len(sin_sesion)}):")
+        print(f"\nNo session found ({len(sin_sesion)}):")
         for d in sorted(sin_sesion):
             print(f"  - {d}")
 
-    print("\nJSON valido: OK (json.load sin error)")
+    print("\nValid JSON: OK (json.load with no error)")
     print("=" * 60)
 
 

@@ -142,11 +142,11 @@ function rowHtml(t) {
 
   let assets = '';
   if (t.report_pdf)
-    assets += `<a href="/reportes/${encodeURI(t.report_pdf)}" target="_blank">[REPORT]</a>`;
+    assets += `<a href="/reports/${encodeURI(t.report_pdf)}" target="_blank">[REPORT]</a>`;
   if (t.detailed_report_pdf)
-    assets += `<a href="/reportes/${encodeURI(t.detailed_report_pdf)}" target="_blank">[DETAILED]</a>`;
+    assets += `<a href="/reports/${encodeURI(t.detailed_report_pdf)}" target="_blank">[DETAILED]</a>`;
   if (t.remediation_pdf)
-    assets += `<a href="/reportes/${encodeURI(t.remediation_pdf)}" target="_blank">[REMEDIATION]</a>`;
+    assets += `<a href="/reports/${encodeURI(t.remediation_pdf)}" target="_blank">[REMEDIATION]</a>`;
   if (!assets) assets = '<span style="color:var(--text-dim)">—</span>';
 
   const findings = t.total_findings == null
