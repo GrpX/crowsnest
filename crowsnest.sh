@@ -28,7 +28,10 @@ DB_FILE="${SCRIPT_DIR}/db/targets.json"
 
 # ── HELPERS ──────────────────────────────────────────────────────────────────
 header() {
-    clear
+    # Sin terminal (CI, pipes, redirecciones) `clear` aborta con "TERM
+    # environment variable not set" y `set -e` se lleva puesto el script
+    # entero. Limpiar pantalla solo tiene sentido con TTY.
+    if [[ -t 1 ]]; then clear || true; fi
     echo -e "${RED}┌─────────────────────────────────────────────────────────┐${NC}"
     echo -e "${RED}│${NC}  ${WHITE}Crowsnest${NC} ${GRAY}— passive reconnaissance${NC}             ${RED}│${NC}"
     echo -e "${RED}│${NC}  ${GRAY}$1${NC}"

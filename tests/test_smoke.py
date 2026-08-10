@@ -9,6 +9,7 @@ de forma visible cuando no hay backend).
 """
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -18,12 +19,18 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+# El runner de CI no tiene terminal: TERM viene vacio y las utilidades de
+# terminfo (`clear`) abortan. Los tests del CLI corren en ese mismo entorno
+# para que la regresion se vea tambien en una maquina de desarrollo con TTY.
+ENV_SIN_TTY = {**os.environ, "TERM": ""}
+
 
 # ─── CLI ────────────────────────────────────────────────────────────────────
 def test_crowsnest_help_sale_con_cero():
     r = subprocess.run(
         ["bash", str(REPO_ROOT / "crowsnest.sh"), "help"],
         capture_output=True, text=True, timeout=60, check=False,
+        env=ENV_SIN_TTY,
     )
     assert r.returncode == 0, f"help salio con {r.returncode}: {r.stderr[:400]}"
     assert "crowsnest.sh" in r.stdout
@@ -34,6 +41,7 @@ def test_crowsnest_comando_desconocido_falla():
     r = subprocess.run(
         ["bash", str(REPO_ROOT / "crowsnest.sh"), "comando-que-no-existe"],
         capture_output=True, text=True, timeout=60, check=False,
+        env=ENV_SIN_TTY,
     )
     assert r.returncode != 0
 
