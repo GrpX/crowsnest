@@ -156,19 +156,21 @@ translate them.
 
 ## Still open
 
-- **Logo.** The current wordmark is plain typography, a placeholder for a
-  real one. Replacing it is a single file — see the branding note above.
-- **Final security grep.** Run before publishing, over the whole tree.
 - **Visual PDF review.** `examples/sample_report.pdf` has been checked by
   text extraction, not read page by page.
-- **Create the remote and push.** Not done. See below.
 
-## No remote, no push
+The logo, the dashboard screenshot, the final security grep over the whole
+tree and the creation of the repository are done.
 
-**The repository has no remote configured and nothing has been pushed.**
-Do not create a remote, add one, or push, until the owner authorises it
-explicitly. Local commits are fine.
+## The repository is public
 
-One reason this matters concretely: the private repo this was derived from
-has real API credentials in its git history, on a remote. That is exactly
-the mistake this repo exists to avoid repeating.
+Remote `origin` is `git@github.com:GrpX/crowsnest.git`, published at
+github.com/GrpX/crowsnest, default branch `main`. CI runs there on GitHub
+Actions — ruff, pytest and the shell job, all green. Committing and pushing
+is the normal flow now; the earlier "no remote, no push" rule is retired.
+
+What has not changed is why that rule existed. The private repo this was
+derived from has real API credentials in its git history, on a remote, and
+published history cannot be rewritten quietly. **Nothing secret goes in a
+commit.** `.env`, any provider config holding real keys, and everything
+under `db/`, `targets/` and `reports/` stay ignored.
