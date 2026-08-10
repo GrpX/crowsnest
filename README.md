@@ -8,6 +8,78 @@ streams every job's output live.
 Nothing it does touches the target: no exploitation, no authentication
 attempts, no traffic beyond what an ordinary visitor generates.
 
+The public version keeps the engineering and drops the business. What
+remains is the part that was interesting to build.
+
+## Example output
+
+![Crowsnest dashboard](docs/screenshots/dashboard.png)
+
+[`examples/sample_report.pdf`](examples/sample_report.pdf) — a full report
+generated against a fictitious target with the OWASP Top 10 framework active:
+executive summary, risk scenarios, findings table with severity, per-finding
+evidence, prioritised remediation plan with effort estimates, and the
+compliance control mapping.
+
+[`examples/sample_target.json`](examples/sample_target.json) — the target
+schema, with entirely fictitious entries.
+
+## Quick start
+
+```bash
+git clone https://github.com/GrpX/crowsnest.git crowsnest && cd crowsnest
+
+cp .env.example .env                                    # API keys, all optional
+cp config/provider-config.example.yaml \
+   config/provider-config.yaml                          # subfinder providers
+
+docker compose build                                    # builds crowsnest:latest
+
+mkdir -p targets && printf 'example.com\nexample.org\n' > targets/domains.txt
+./crowsnest.sh recon                                    # score domains, no Docker
+./crowsnest.sh report example.com "Example"             # full scan → report JSON
+./crowsnest.sh webapp                                   # dashboard on :5000
+```
+
+Every API key is optional: without them the recon stage simply queries fewer
+sources. Without an LLM backend the enrichment stage is skipped and the
+report is generated without its narrative summary — the PDF still renders.
+
+Full install in [`SETUP.md`](SETUP.md); the agent layer in
+[`openclaw/README.md`](openclaw/README.md); adding a compliance framework in
+[`config/compliance/README.md`](config/compliance/README.md).
+
+### Commands
+
+| Command | What it does |
+|---|---|
+| `./crowsnest.sh recon` | Score domains with checkdmarc. No Docker required. |
+| `./crowsnest.sh report <domain> "<name>"` | Full containerised scan → report JSON |
+| `./crowsnest.sh diagnostico` | Re-render the detailed report from the latest session |
+| `./crowsnest.sh trabajo` | Full pipeline against an authorised target |
+| `./crowsnest.sh batch [list.txt]` | Process a domain list in parallel |
+| `./crowsnest.sh targets enriquecer [list.txt]` | Run the LLM enrichment agents |
+| `./crowsnest.sh webapp` | Start the dashboard |
+
+## Scope
+
+What it produces: indicators of exposure gathered from public sources —
+DNS records, certificate and header data, indexed subdomains, DMARC/SPF
+posture, technology fingerprints, and CVE matches from `nuclei` templates.
+These are indicators, not confirmation by exploitation; nothing in the
+pipeline verifies a finding by acting on the target.
+
+What it needs: Docker, to run the containerised recon tools. An LLM backend
+is optional — without one, the enrichment and executive-summary stages are
+skipped and the report still renders (see `scripts/nuclei_to_report.py` and
+the smoke test that covers this path).
+
+What runs without credentials: `subfinder`, `httpx`, `whatweb` and
+`checkdmarc` work with no API keys. The OSINT provider keys in
+`.env.example` (Shodan, Censys, GitHub, Chaos, SecurityTrails, BinaryEdge,
+VirusTotal, FullHunt, ZoomEye) are optional and widen subdomain coverage —
+they do not gate any functionality.
+
 ## Background
 
 Crowsnest began as internal tooling at a small infosec company — the
@@ -18,10 +90,9 @@ client-ready documents instead of raw output, and a compliance mapping
 layer, because those reports had to speak the language of whatever
 regulation the reader answered to.
 
-The public version keeps the engineering and drops the business. What
-remains is the part that was interesting to build.
+## How it works
 
-## Pipeline
+### Pipeline
 
 ```
 domains.txt
@@ -48,6 +119,33 @@ A target moves through `queued → recon → enriched → reported`, with `skipp
 as the branch for domains the prefilter rejects. Those five states are
 declared once, in `lib/states.py`, and every consumer — shell heredocs,
 Python modules, the web API and the frontend — reads them from there.
+
+### Stack
+
+Python · Docker Compose · Flask + SSE · Jinja2 + WeasyPrint · Crawl4AI ·
+an Ollama-compatible LLM endpoint.
+
+Recon tooling runs inside the container: subfinder, httpx, nuclei,
+checkdmarc, whatweb, nmap, amass.
+
+### Layout
+
+```
+crowsnest.sh            CLI entry point
+lib/                    states, branding, revision — shared by every consumer
+config/
+  compliance/           one file per compliance framework
+  provider-config.example.yaml
+scripts/
+  audit.sh              recon inside the container
+  nuclei_to_report.py   findings → structured report JSON
+  generate_pdf.py       report JSON → PDF
+openclaw/               LLM agent layer (see its README)
+templates/              report template + wordmark
+webapp/                 Flask dashboard, SSE log streaming
+examples/               sample report and target schema
+docs/                   tooling evaluation and design decisions
+```
 
 ## Pluggable by design
 
@@ -79,7 +177,6 @@ templates — two near-duplicate templates whose only real difference was
 which statute they cited. Making the mapping a config file collapsed them
 into one and removed the assumption that the reader's obligations are
 knowable from the code. Jurisdiction is an input here, not a scope.
-
 
 ## Design constraints — why passive-only
 
@@ -125,102 +222,6 @@ rejected for requiring an authenticated session, and which was left out
 because it fingerprints the target's hosts rather than only reading public
 DNS. The constraint has already cost this pipeline a tool it wanted and
 reduced another to half its capability.
-
-## Scope
-
-What it produces: indicators of exposure gathered from public sources —
-DNS records, certificate and header data, indexed subdomains, DMARC/SPF
-posture, technology fingerprints, and CVE matches from `nuclei` templates.
-These are indicators, not confirmation by exploitation; nothing in the
-pipeline verifies a finding by acting on the target.
-
-What it needs: Docker, to run the containerised recon tools. An LLM backend
-is optional — without one, the enrichment and executive-summary stages are
-skipped and the report still renders (see `scripts/nuclei_to_report.py` and
-the smoke test that covers this path).
-
-What runs without credentials: `subfinder`, `httpx`, `whatweb` and
-`checkdmarc` work with no API keys. The OSINT provider keys in
-`.env.example` (Shodan, Censys, GitHub, Chaos, SecurityTrails, BinaryEdge,
-VirusTotal, FullHunt, ZoomEye) are optional and widen subdomain coverage —
-they do not gate any functionality.
-
-## Stack
-
-Python · Docker Compose · Flask + SSE · Jinja2 + WeasyPrint · Crawl4AI ·
-an Ollama-compatible LLM endpoint.
-
-Recon tooling runs inside the container: subfinder, httpx, nuclei,
-checkdmarc, whatweb, nmap, amass.
-
-## Example output
-
-![Crowsnest dashboard](docs/screenshots/dashboard.png)
-
-[`examples/sample_report.pdf`](examples/sample_report.pdf) — a full report
-generated against a fictitious target with the OWASP Top 10 framework active:
-executive summary, risk scenarios, findings table with severity, per-finding
-evidence, prioritised remediation plan with effort estimates, and the
-compliance control mapping.
-
-[`examples/sample_target.json`](examples/sample_target.json) — the target
-schema, with entirely fictitious entries.
-
-## Quick start
-
-```bash
-git clone <this-repo> crowsnest && cd crowsnest
-
-cp .env.example .env                                    # API keys, all optional
-cp config/provider-config.example.yaml \
-   config/provider-config.yaml                          # subfinder providers
-
-docker compose build                                    # builds crowsnest:latest
-
-mkdir -p targets && printf 'example.com\nexample.org\n' > targets/domains.txt
-./crowsnest.sh recon                                    # score domains, no Docker
-./crowsnest.sh report example.com "Example"             # full scan → report JSON
-./crowsnest.sh webapp                                   # dashboard on :5000
-```
-
-Every API key is optional: without them the recon stage simply queries fewer
-sources. Without an LLM backend the enrichment stage is skipped and the
-report is generated without its narrative summary — the PDF still renders.
-
-Full install in [`SETUP.md`](SETUP.md); the agent layer in
-[`openclaw/README.md`](openclaw/README.md); adding a compliance framework in
-[`config/compliance/README.md`](config/compliance/README.md).
-
-## Commands
-
-| Command | What it does |
-|---|---|
-| `./crowsnest.sh recon` | Score domains with checkdmarc. No Docker required. |
-| `./crowsnest.sh report <domain> "<name>"` | Full containerised scan → report JSON |
-| `./crowsnest.sh diagnostico` | Re-render the detailed report from the latest session |
-| `./crowsnest.sh trabajo` | Full pipeline against an authorised target |
-| `./crowsnest.sh batch [list.txt]` | Process a domain list in parallel |
-| `./crowsnest.sh targets enriquecer [list.txt]` | Run the LLM enrichment agents |
-| `./crowsnest.sh webapp` | Start the dashboard |
-
-## Layout
-
-```
-crowsnest.sh            CLI entry point
-lib/                    states, branding, revision — shared by every consumer
-config/
-  compliance/           one file per compliance framework
-  provider-config.example.yaml
-scripts/
-  audit.sh              recon inside the container
-  nuclei_to_report.py   findings → structured report JSON
-  generate_pdf.py       report JSON → PDF
-openclaw/               LLM agent layer (see its README)
-templates/              report template + wordmark
-webapp/                 Flask dashboard, SSE log streaming
-examples/               sample report and target schema
-docs/                   tooling evaluation and design decisions
-```
 
 ## What is not in this repository
 
